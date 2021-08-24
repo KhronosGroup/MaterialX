@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <materialx version="1.38" colorspace="lin_rec709">
-  <gltf_pbr name="SR_default" type="surfaceshader">
+  <gltf_pbr name="SR_default" type="material">
     <input name="base_color" type="color3" value="0.8, 0.8, 0.8" />
     <input name="metallic" type="float" value="0" />
     <input name="roughness" type="float" value="0" />
@@ -18,8 +18,7 @@
     <input name="alpha" type="float" value="1" />
     <input name="alpha_mode" type="integer" value="0" />
     <input name="alpha_cutoff" type="float" value="0.5" />
+    <input name="attenuation_distance" type="float" value="10" />
+    <input name="attenuation_color" type="float" value="0.5, 0.5, 0.5" />
   </gltf_pbr>
-  <surfacematerial name="Default" type="material">
-    <input name="surfaceshader" type="surfaceshader" nodename="SR_default" />
-  </surfacematerial>
 </materialx>
