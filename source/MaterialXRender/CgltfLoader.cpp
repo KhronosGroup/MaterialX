@@ -208,7 +208,11 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
                 Vector3 boxMin = { MAX_FLOAT, MAX_FLOAT, MAX_FLOAT };
                 Vector3 boxMax = { -MAX_FLOAT, -MAX_FLOAT, -MAX_FLOAT };
            
-                const string& meshName = paths[instance];
+                string meshName = paths[instance];
+                while (meshNames.count(meshName))
+                {
+                    meshName = incrementName(meshName);
+                }
                 meshNames.insert(meshName);
 
                 MeshPtr mesh = Mesh::create(meshName);
