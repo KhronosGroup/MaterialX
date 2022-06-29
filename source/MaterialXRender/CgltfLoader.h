@@ -22,7 +22,7 @@ class MX_RENDER_API CgltfLoader : public GeometryLoader
 {
   public:
     CgltfLoader() :
-        _debugLevel(0)
+        _debugLevel(1)
     {
         _extensions = { "glb", "GLB", "gltf", "GLTF" };
     }
