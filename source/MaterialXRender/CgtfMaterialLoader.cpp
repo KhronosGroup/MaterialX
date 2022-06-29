@@ -98,10 +98,7 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
     if (cmesh)
     {
         string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
-        //if (meshName.size())
-        {
-            path = path / meshName;
-        }
+        path = path / meshName;
 
         cgltf_primitive* prim = cmesh->primitives;
         if (prim && prim->material)
