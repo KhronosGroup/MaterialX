@@ -17,6 +17,7 @@
 
 #define CGLTF_IMPLEMENTATION
 #include <MaterialXRender/External/Cgltf/cgltf.h>
+#undef CGLTF_IMPLEMENTATION
 
 #if defined(_MSC_VER)
     #pragma warning(pop)
@@ -402,7 +403,10 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
         }
     }
 
-    cgltf_free(data);
+    if (data)
+    {
+        cgltf_free(data);
+    }
 
     return true;
 }

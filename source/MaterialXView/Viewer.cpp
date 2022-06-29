@@ -4,6 +4,7 @@
 #include <MaterialXRenderGlsl/TextureBaker.h>
 
 #include <MaterialXRender/CgltfLoader.h>
+#include <MaterialXRender/CgltfMaterialLoader.h>
 #include <MaterialXRender/Harmonics.h>
 #include <MaterialXRender/OiioImageLoader.h>
 #include <MaterialXRender/StbImageLoader.h>
@@ -600,11 +601,44 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
     materialButton->set_callback([this]()
     {
         m_process_events = false;
-        std::string filename = ng::file_dialog({ { "mtlx", "MaterialX" } }, false);
+        std::string filename = ng::file_dialog({ { "mtlx", "MaterialX" }, { "gltf", "glTF" } }, false);
         if (!filename.empty())
         {
+            mx::FilePath filePath(filename);
+            if (filePath.getExtension() == "gltf")
+            {
+                mx::MaterialLoaderPtr gltfMTLXLoader = mx::CgltfMaterialLoader::create();
+                gltfMTLXLoader->setDefinitions(_stdLib);
+                gltfMTLXLoader->setGenerateAssignments(true);
+                bool loadedMaterial = gltfMTLXLoader->load(filename);
+                mx::DocumentPtr materials = loadedMaterial ? gltfMTLXLoader->getMaterials() : nullptr;
+                if (materials)
+                {
+                    mx::XmlWriteOptions writeOptions;
+                    writeOptions.elementPredicate = [](mx::ConstElementPtr elem)
+                    {
+                        if (elem->hasSourceUri())
+                        {
+                            return false;
+                        }
+                        return true;
+                    };
+
+                    mx::FilePath outputPath = filePath.asString() + ".mtlx";
+                    mx::writeToXmlFile(materials, outputPath, &writeOptions);
+                    gltfMTLXLoader->save(outputPath);
+
+                    // Load generated materials.
+                    // TODO: Bit clumsy. Need to change to accept an existing document.
+                    _materialFilename = outputPath;
+                    loadDocument(_materialFilename, _stdLib);
+                }
+            }
+            else
+            {
             _materialFilename = filename;
             loadDocument(_materialFilename, _stdLib);
+        }
         }
         m_process_events = true;
     });
