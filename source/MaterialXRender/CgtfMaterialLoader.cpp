@@ -84,11 +84,10 @@ void initialize_cgtlf_texture(cgltf_texture& texture, const string& name, const 
     texture.image->uri = const_cast<char*>((new string(uri))->c_str());
 }
 
-void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn, FilePath& path)
+void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn, FilePath& path, unsigned int nodeCount,
+                          unsigned int meshCount)
 {
     cgltf_node* cnode = static_cast<cgltf_node*>(cnodeIn);
-    static unsigned int nodeCount = 0;
-    static unsigned int meshCount = 0;
 
     // Push node name on to path
     FilePath prevPath = path;
@@ -125,7 +124,7 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
     {
         if (cnode->children[i])
         {
-            computeMeshMaterials(materialMeshList, cnode->children[i], path);
+            computeMeshMaterials(materialMeshList, cnode->children[i], path, nodeCount, meshCount);
         }
     }
 
@@ -1011,6 +1010,8 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
     if (_generateAssignments)
     {
         FilePath meshPath("/");
+        unsigned int nodeCount = 0;
+        unsigned int meshCount = 0;
         for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
         {
             cgltf_scene* scene = &data->scenes[sceneIndex];
@@ -1021,7 +1022,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 {
                     continue;
                 }
-                computeMeshMaterials(materialMeshList, cnode, meshPath);
+                computeMeshMaterials(materialMeshList, cnode, meshPath, nodeCount, meshCount);
             }
         }
 

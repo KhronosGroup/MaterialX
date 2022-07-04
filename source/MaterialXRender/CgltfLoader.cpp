@@ -40,48 +40,14 @@ const float MAX_FLOAT = std::numeric_limits<float>::max();
 const size_t FACE_VERTEX_COUNT = 3;
 
 // List of transforms which match to meshes
-class GLTFInstanceInfo
-{
-  public:
-    GLTFInstanceInfo(const Matrix44& matrix, const FilePath& path)
-        : _matrix(matrix)
-        , _path(path)
-    {}
+using GLTFMeshMatrixList = std::unordered_map<cgltf_mesh*, std::vector<Matrix44>>;
 
-    const Matrix44& getMatrix() const
-    {
-        return _matrix;
-    }
-
-    string getPathString() const
-    {
-        return _path.asString(FilePath::FormatPosix);
-    }
-
-  protected:
-    Matrix44 _matrix;
-    FilePath _path;
-};
-using GLTFMeshInstanceList = std::unordered_map<cgltf_mesh*, std::vector<GLTFInstanceInfo>>;
-
-const std::string DEFAULT_NODE_PREFIX = "NODE_";
-const std::string DEFAULT_MESH_PREFIX = "MESH_";
-
-// Compute matrices and path names for each mesh. Appends information for each transform instance
-void computeMeshInstanceInfo(GLTFMeshInstanceList& meshInfo, cgltf_node* cnode, 
-                             FilePath path, size_t nodeCount, size_t meshCount)
+// Compute matrices for each mesh. Appends a transform for each transform instance
+void computeMeshMatrices(GLTFMeshMatrixList& meshMatrices, cgltf_node* cnode)
 {
     cgltf_mesh* cmesh = cnode->mesh;
-
-    FilePath prevPath = path;
-    string cnodeName = cnode->name ? string(cnode->name) : DEFAULT_NODE_PREFIX + std::to_string(nodeCount++);
-    path = path / ( cnodeName + "/" );
-
     if (cmesh)
     {
-        string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
-        path = path / meshName;
-
         float t[16];
         cgltf_node_transform_world(cnode, t);
         Matrix44 positionMatrix = Matrix44(
@@ -89,8 +55,7 @@ void computeMeshInstanceInfo(GLTFMeshInstanceList& meshInfo, cgltf_node* cnode,
             (float) t[4], (float) t[5], (float) t[6], (float) t[7],
             (float) t[8], (float) t[9], (float) t[10], (float) t[11],
             (float) t[12], (float) t[13], (float) t[14], (float) t[15]);
-
-        meshInfo[cmesh].push_back(GLTFInstanceInfo(positionMatrix, path));
+        meshMatrices[cmesh].push_back(positionMatrix);
     }
 
     // Iterate over all children. Note that the existence of a mesh
@@ -98,12 +63,42 @@ void computeMeshInstanceInfo(GLTFMeshInstanceList& meshInfo, cgltf_node* cnode,
     // continue even when a mesh is encountered.
     for (cgltf_size i = 0; i < cnode->children_count; i++)
     {
-        computeMeshInstanceInfo(meshInfo, cnode->children[i], path, nodeCount, meshCount);
+        computeMeshMatrices(meshMatrices, cnode->children[i]);
+    }
+}
+
+const std::string DEFAULT_NODE_PREFIX = "NODE_";
+const std::string DEFAULT_MESH_PREFIX = "MESH_";
+
+// List of path names which match to meshes
+using GLTFMeshPathList = std::unordered_map<cgltf_mesh*, StringVec>;
+
+void computeMeshPaths(GLTFMeshPathList& meshPaths, cgltf_node* cnode,  FilePath path, size_t nodeCount, size_t meshCount)
+{
+    FilePath prevPath = path;
+    string cnodeName = cnode->name ? string(cnode->name) : DEFAULT_NODE_PREFIX + std::to_string(nodeCount++);
+    path = path / ( cnodeName + "/" );
+
+    cgltf_mesh* cmesh = cnode->mesh;
+    if (cmesh)
+    {
+        string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
+        path = path / meshName;
+        meshPaths[cmesh].push_back(path.asString(FilePath::FormatPosix));
+    }
+
+    // Iterate over all children. Note that the existence of a mesh
+    // does not imply that this is a leaf node so traversal should 
+    // continue even when a mesh is encountered.
+    for (cgltf_size i = 0; i < cnode->children_count; i++)
+    {
+        computeMeshPaths(meshPaths, cnode->children[i], path, nodeCount, meshCount);
     }
 
     // Pop path name
     path = prevPath;
 }
+
 
 } // anonymous namespace
 
@@ -133,12 +128,9 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
         return false;
     }
 
-    // Precompute mesh / instance associations starting from the root
+    // Precompute mesh / matrix associations starting from the root
     // of the scene.
-    GLTFMeshInstanceList gltfMeshInstanceList;
-    static unsigned int nodeCount = 0;
-    static unsigned int meshCount = 0;
-    FilePath meshPath("/");
+    GLTFMeshMatrixList gltfMeshMatrixList;
     for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
     {
         cgltf_scene* scene = &data->scenes[sceneIndex];
@@ -149,7 +141,25 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
             {
                 continue;
             }
-            computeMeshInstanceInfo(gltfMeshInstanceList, cnode, meshPath, nodeCount, meshCount);
+            computeMeshMatrices(gltfMeshMatrixList, cnode);
+        }
+    }
+
+    GLTFMeshPathList gltfMeshPathList;
+    unsigned int nodeCount = 0;
+    unsigned int meshCount = 0;
+    FilePath path("/");
+    for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
+    {
+        cgltf_scene* scene = &data->scenes[sceneIndex];
+        for (cgltf_size nodeIndex = 0; nodeIndex < scene->nodes_count; ++nodeIndex)
+        {
+            cgltf_node* cnode = scene->nodes[nodeIndex];
+            if (!cnode)
+            {
+                continue;
+            }
+            computeMeshPaths(gltfMeshPathList, cnode, path, nodeCount, meshCount);
         }
     }
 
@@ -165,27 +175,30 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
             continue;
         }
         std::vector<Matrix44> positionMatrices;
-        StringVec paths;
-        if (gltfMeshInstanceList.find(cmesh) != gltfMeshInstanceList.end())
+        if (gltfMeshMatrixList.find(cmesh) != gltfMeshMatrixList.end())
         {
-            std::vector<GLTFInstanceInfo> infoList = gltfMeshInstanceList[cmesh];
-            for (const GLTFInstanceInfo& info : infoList)
-            {
-                positionMatrices.push_back(info.getMatrix());
-                paths.push_back(info.getPathString());
-            }
+            positionMatrices = gltfMeshMatrixList[cmesh];
         }
         if (positionMatrices.empty())
         {
             positionMatrices.push_back(Matrix44::IDENTITY);
+        }
+
+        StringVec paths;
+        if (gltfMeshPathList.find(cmesh) != gltfMeshPathList.end())
+        {
+            paths = gltfMeshPathList[cmesh];
+        }
+        if (paths.empty())
+        {
             string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
             paths.push_back(meshName);
         }
 
         // Iterate through all parent transform
-        for (size_t instance=0; instance < positionMatrices.size(); instance++)
+        for (size_t mtx=0; mtx < positionMatrices.size(); mtx++)
         {
-            const Matrix44& positionMatrix = positionMatrices[instance];
+            const Matrix44& positionMatrix = positionMatrices[mtx];
             const Matrix44 normalMatrix = positionMatrix.getInverse().getTranspose();
             
             for (cgltf_size primitiveIndex = 0; primitiveIndex < cmesh->primitives_count; ++primitiveIndex)
@@ -207,8 +220,9 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
 
                 Vector3 boxMin = { MAX_FLOAT, MAX_FLOAT, MAX_FLOAT };
                 Vector3 boxMax = { -MAX_FLOAT, -MAX_FLOAT, -MAX_FLOAT };
-           
-                string meshName = paths[instance];
+
+                // Create a unique path for the mesh. 
+                string meshName = paths[mtx];
                 while (meshNames.count(meshName))
                 {
                     meshName = incrementName(meshName);

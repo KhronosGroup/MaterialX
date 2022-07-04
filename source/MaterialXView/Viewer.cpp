@@ -636,9 +636,9 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
             }
             else
             {
-            _materialFilename = filename;
-            loadDocument(_materialFilename, _stdLib);
-        }
+                _materialFilename = filename;
+                loadDocument(_materialFilename, _stdLib);
+            }
         }
         m_process_events = true;
     });
