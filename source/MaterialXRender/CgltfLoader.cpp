@@ -84,6 +84,7 @@ void computeMeshPaths(GLTFMeshPathList& meshPaths, cgltf_node* cnode,  FilePath 
     {
         string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
         path = path / meshName;
+        path = createValidName(path);
         meshPaths[cmesh].push_back(path.asString(FilePath::FormatPosix));
     }
 
