@@ -96,8 +96,12 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
     cgltf_mesh* cmesh = cnode->mesh;
     if (cmesh)
     {
-        string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
-        path = path / createValidName(meshName);
+        // Set path to mesh if no transform path found
+        if (path.isEmpty())
+        {
+            string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
+            path = createValidName(meshName);
+        }
 
         cgltf_primitive* prim = cmesh->primitives;
         if (prim && prim->material)
@@ -1009,7 +1013,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
     GLTFMaterialMeshList materialMeshList;
     if (_generateAssignments)
     {
-        FilePath meshPath("/");
+        FilePath meshPath;
         unsigned int nodeCount = 0;
         unsigned int meshCount = 0;
         for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)

@@ -82,8 +82,13 @@ void computeMeshPaths(GLTFMeshPathList& meshPaths, cgltf_node* cnode,  FilePath 
     cgltf_mesh* cmesh = cnode->mesh;
     if (cmesh)
     {
-        string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
-        path = path / createValidName(meshName);
+        // Set path to mesh if no transform path found
+        if (path.isEmpty())
+        {
+            string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
+            path = createValidName(meshName);
+        }
+
         meshPaths[cmesh].push_back(path.asString(FilePath::FormatPosix));
     }
 
@@ -148,7 +153,7 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
     GLTFMeshPathList gltfMeshPathList;
     unsigned int nodeCount = 0;
     unsigned int meshCount = 0;
-    FilePath path("/");
+    FilePath path;
     for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
     {
         cgltf_scene* scene = &data->scenes[sceneIndex];
