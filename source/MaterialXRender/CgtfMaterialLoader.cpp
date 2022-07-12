@@ -92,13 +92,12 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
     // Push node name on to path
     FilePath prevPath = path;
     string cnodeName = cnode->name ? string(cnode->name) : DEFAULT_NODE_PREFIX + std::to_string(nodeCount++);
-    path = path / ( cnodeName + "/" );
+    path = path / ( createValidName(cnodeName) + "/" );
     cgltf_mesh* cmesh = cnode->mesh;
     if (cmesh)
     {
         string meshName = cmesh->name ? string(cmesh->name) : DEFAULT_MESH_PREFIX + std::to_string(meshCount++);
-        path = path / meshName;
-        path = createValidName(path);
+        path = path / createValidName(meshName);
 
         cgltf_primitive* prim = cmesh->primitives;
         if (prim && prim->material)
