@@ -38,6 +38,7 @@
     </geomcolor>
     <swizzle name="geomcolor_alpha" type="float" nodedef="ND_swizzle_color4_float">
       <input name="in" type="color4" nodename="geomcolor" />
+      <input name="channels" type="string" uniform="true" value="a" />
     </swizzle>
     <swizzle name="geomcolor_color" type="color3" nodedef="ND_swizzle_color4_color3">
       <input name="in" type="color4" nodename="geomcolor" />
@@ -45,6 +46,7 @@
     </swizzle>
     <swizzle name="image_alpha" type="float" nodedef="ND_swizzle_color4_float">
       <input name="in" type="color4" nodename="tiledimage" />
+      <input name="channels" type="string" uniform="true" value="a" />
     </swizzle>
     <multiply name="image_alpha_blend" type="float" nodedef="ND_multiply_float">
       <input name="in1" type="float" nodename="image_alpha" />

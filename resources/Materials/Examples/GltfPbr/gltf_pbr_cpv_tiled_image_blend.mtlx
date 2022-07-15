@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<materialx version="1.38" colorspace="lin_rec709" fileprefix="../../../Images/">
+  <gltf_pbr name="gltf_pbr" type="surfaceshader" version="0.0.1" >
+    <input name="base_color" type="color3" nodename="colortiledimage1" output="out_color" />
+    <input name="alpha" type="float" nodename="colortiledimage1" output="out_alpha" />
+  </gltf_pbr>
+  <surfacematerial name="surfacematerial" type="material" >
+    <input name="surfaceshader" type="surfaceshader" nodename="gltf_pbr" />
+    <input name="displacementshader" type="displacementshader" value="" />
+  </surfacematerial>
+  <colortiledimage name="colortiledimage1" type="multioutput" >
+    <input name="file" type="filename" uniformed="tue" value="grid.png" colorspace="srgb_texture" />
+    <input name="geometryColorMix" type="float" value="0.0" />
+    <input name="geometryAlphaMix" type="float" value="0.0" />
+    <output name="out_color" type="color3" />
+    <output name="out_alpha" type="float" />
+  </colortiledimage>
+</materialx>
+
