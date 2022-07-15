@@ -18,7 +18,7 @@
       <input name="scale" type="float" value="1.0" />
       <input name="space" type="string" value="tangent" />
     </normalmap>
-    <gltf_mroextract name="gltf_mroextract" type="multioutput" version="1.0" >
+    <gltf_ormextract name="ExtractORM" type="multioutput" version="1.0" >
       <input name="file" type="filename" uniform="true" value="BoomBox_occlusionRoughnessMetallic.png" />
       <input name="occlusionIndex" type="integer" value="2" />      
       <input name="roughnessIndex" type="integer" value="1" />
@@ -26,13 +26,13 @@
       <output name="outOcclusion" type="float" />
       <output name="outRoughness" type="float" />
       <output name="outMetallic" type="float" />
-    </gltf_mroextract>
+    </gltf_ormextract>
     <output name="out_basecolor" type="color3" nodename="image_basecolor" />
     <output name="out_emission" type="color3" nodename="image_emission" />
     <output name="out_normal" type="vector3" nodename="normalmap" />
-    <output name="out_occlusion" type="float" nodename="gltf_mroextract" output="outOcclusion"/>
-    <output name="out_roughness" type="float" nodename="gltf_mroextract" output="outRoughness"/>
-    <output name="out_metallic" type="float" nodename="gltf_mroextract" output="outMetallic"/>
+    <output name="out_occlusion" type="float" nodename="ExtractORM" output="outOcclusion"/>
+    <output name="out_roughness" type="float" nodename="ExtractORM" output="outRoughness"/>
+    <output name="out_metallic" type="float" nodename="ExtractORM" output="outMetallic"/>
   </nodegraph>
   <gltf_pbr name="SR_boombox" type="surfaceshader">
     <input name="base_color" type="color3" nodegraph="NG_boombox" output="out_basecolor" />
