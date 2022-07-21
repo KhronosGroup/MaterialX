@@ -104,7 +104,6 @@ void computeMeshPaths(GLTFMeshPathList& meshPaths, cgltf_node* cnode,  FilePath 
     path = prevPath;
 }
 
-
 } // anonymous namespace
 
 bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoordVerticalFlip)
@@ -226,7 +225,7 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
                 Vector3 boxMin = { MAX_FLOAT, MAX_FLOAT, MAX_FLOAT };
                 Vector3 boxMax = { -MAX_FLOAT, -MAX_FLOAT, -MAX_FLOAT };
 
-                // Create a unique path for the mesh. 
+                // Create a unique path for the mesh.
                 string meshName = paths[mtx];
                 while (meshNames.count(meshName))
                 {
@@ -457,10 +456,7 @@ bool CgltfLoader::load(const FilePath& filePath, MeshList& meshList, bool texcoo
         }
     }
 
-    if (data)
-    {
-        cgltf_free(data);
-    }
+    cgltf_free(data);
 
     return true;
 }
