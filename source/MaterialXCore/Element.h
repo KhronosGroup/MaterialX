@@ -294,7 +294,7 @@ class MX_CORE_API Element : public std::enable_shared_from_this<Element>
     /// Return the element, if any, that this one directly inherits from.
     ElementPtr getInheritsFrom() const
     {
-        return resolveRootNameReference<Element>(getInheritString());
+        return resolveNameReference<Element>(getInheritString());
     }
 
     /// Return true if this element has the given element as an inherited base,
@@ -761,19 +761,19 @@ class MX_CORE_API Element : public std::enable_shared_from_this<Element>
     /// name, and attributes.
     string asString() const;
 
+    /// @}
+
+  protected:
     // Resolve a reference to a named element at the scope of the given parent,
     // taking the namespace at the scope of this element into account.  If no parent
     // is provided, then the root scope of the document is used.
-    template <class T> shared_ptr<T> resolveRootNameReference(const string& name, ConstElementPtr parent = nullptr) const
+    template <class T> shared_ptr<T> resolveNameReference(const string& name, ConstElementPtr parent = nullptr) const
     {
         ConstElementPtr scope = parent ? parent : getRoot();
         shared_ptr<T> child = scope->getChildOfType<T>(getQualifiedName(name));
         return child ? child : scope->getChildOfType<T>(name);
     } 
 
-    /// @}
-
-  protected:
     // Enforce a requirement within a validate method, updating the validation
     // state and optional output text if the requirement is not met.
     void validateRequire(bool expression, bool& res, string* message, const string& errorDesc) const;
