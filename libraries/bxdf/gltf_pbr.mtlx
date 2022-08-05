@@ -615,4 +615,88 @@
     <output name="out3" type="float" nodename="extract3" />
   </nodegraph>
 
+  <!--
+    Node: <colortiledimage> Supplemental Node
+    Modulate a color4 tiledimage color image by an input color. Default binding for color is geometry color 0.
+  -->
+  <nodedef name="ND_colortiledimage" node="colortiledimage" version="1.0" isdefaultversion="true" nodegroup="texture2d">
+    <input name="file" type="filename" uniform="true" value="" uifolder="Image" />
+    <input name="default" type="color4" value="0, 0, 0, 0" uifolder="Image" />
+    <input name="texcoord" type="vector2" value="0, 0" defaultgeomprop="UV0" uifolder="Image" />	  
+    <input name="index" type="integer" value="0" uifolder="Image" />
+    <input name="uvtiling" type="vector2" value="1, 1" uifolder="Image" />
+    <input name="uvoffset" type="vector2" value="0, 0" uifolder="Image" />
+    <input name="realworldimagesize" type="vector2" value="1, 1" uifolder="Image" />
+    <input name="realworldtilesize" type="vector2" value="1, 1" uifolder="Image" />
+    <input name="filtertype" type="string" uniform="true" value="linear" uifolder="Image" />
+    <input name="framerange" type="string" uniform="true" value="" uifolder="Image" />
+    <input name="frameoffset" type="integer" value="0" uifolder="Image" />
+    <input name="frameendaction" type="string" uniform="true" value="constant" uifolder="Image" />
+    <input name="color" type="color4" value="1, 1, 1, 1" defaultgeomprop ="COLOR4_0" uifolder="Color" />
+    <input name="colormix" type="float" value="0" uifolder="Color" />
+    <input name="alphamix" type="float" value="0" uifolder="Color" />
+    <output name="out_color" type="color3" value="0, 0, 0" />
+    <output name="out_alpha" type="float" value="0" />
+  </nodedef>
+
+  <implementation name="IMPL_colortiledimage" nodedef="ND_colortiledimage" nodegraph="NG_colortiledimage" />
+
+  <nodegraph name="NG_colortiledimage" >
+    <input name="file" type="filename" uniform="true" value="" />
+    <input name="default" type="color4" value="0, 0, 0, 0" />
+    <input name="index" type="integer" value="0" />
+    <input name="uvtiling" type="vector2" value="1, 1" />
+    <input name="uvoffset" type="vector2" value="0, 0" />
+    <input name="realworldimagesize" type="vector2" value="1, 1" />
+    <input name="realworldtilesize" type="vector2" value="1, 1" />
+    <input name="filtertype" type="string" uniform="true" value="linear" />
+    <input name="framerange" type="string" uniform="true" value="" />
+    <input name="frameoffset" type="integer" value="0" />
+    <input name="frameendaction" type="string" uniform="true" value="constant" />
+    <input name="color" type="color4" value="1, 1, 1, 1" defaultgeomprop ="COLOR4_0" />
+    <input name="colormix" type="float" value="0" />
+    <input name="alphamix" type="float" value="0" />
+    <swizzle name="color_alpha" type="float" >
+      <input name="in" type="color4" interfacename="color" />
+      <input name="channels" type="string" uniform="true" value="a" />
+    </swizzle>
+    <swizzle name="color_color" type="color3"  >
+      <input name="in" type="color4" interfacename="color"/>
+      <input name="channels" type="string" uniform="true" value="rgb" />
+    </swizzle>
+    <swizzle name="image_alpha" type="float" >
+      <input name="in" type="color4" nodename="tiledimage" />
+      <input name="channels" type="string" uniform="true" value="a" />
+    </swizzle>
+    <swizzle name="image_color" type="color3" >
+      <input name="in" type="color4" nodename="tiledimage" />
+      <input name="channels" type="string" uniform="true" value="rgb" />
+    </swizzle>
+    <tiledimage name="tiledimage" type="color4" >
+      <input name="file" type="filename" uniform="true" interfacename="file" value="" />
+      <input name="default" type="color4" interfacename="default" value="0, 0, 0, 0" />
+      <input name="texcoord" type="vector2" interfacename="texcoord" value="0, 0" />
+      <input name="uvtiling" type="vector2" interfacename="uvtiling" value="1, 1" />
+      <input name="uvoffset" type="vector2" interfacename="uvoffset" value="0, 0" />
+      <input name="realworldimagesize" type="vector2" interfacename="realworldimagesize" value="1, 1" />
+      <input name="realworldtilesize" type="vector2" interfacename="realworldtilesize" value="1, 1" />
+      <input name="filtertype" type="string" uniform="true" interfacename="filtertype" value="linear" />
+      <input name="framerange" type="string" uniform="true" interfacename="framerange" />
+      <input name="frameoffset" type="integer" uniform="true" interfacename="frameoffset" value="0" />
+      <input name="frameendaction" type="string" uniform="true" interfacename="frameendaction" value="constant" />
+    </tiledimage>
+    <mix name="mix_color" type="color3" >
+      <input name="fg" type="color3" nodename="color_color" />
+      <input name="bg" type="color3" nodename="image_color" />
+      <input name="mix" type="float" interfacename="colormix" value="0" />
+    </mix>
+    <mix name="mix_alpha" type="float" >
+      <input name="fg" type="float" nodename="color_alpha" />
+      <input name="bg" type="float" nodename="image_alpha" />
+      <input name="mix" type="float" interfacename="alphamix" value="0" />
+    </mix>
+    <output name="out_color" type="color3" nodename="mix_color" />
+    <output name="out_alpha" type="float" nodename="mix_alpha" />
+  </nodegraph>	
+	
 </materialx>

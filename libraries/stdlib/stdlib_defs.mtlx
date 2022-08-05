@@ -78,8 +78,11 @@
   <geompropdef name="Tworld" type="vector3" geomprop="tangent" space="world" index="0" />
   <geompropdef name="Bworld" type="vector3" geomprop="bitangent" space="world" index="0" />
   <geompropdef name="UV0" type="vector2" geomprop="texcoord" index="0" />
+  <geompropdef name="COLOR1_0" type="float" geomprop="geomcolor" index="0" />
+  <geompropdef name="COLOR3_0" type="color3" geomprop="geomcolor" index="0" />
+  <geompropdef name="COLOR4_0" type="color4" geomprop="geomcolor" index="0" />
 
-  <!-- ======================================================================== -->
+	<!-- ======================================================================== -->
   <!-- Materials                                                                -->
   <!-- ======================================================================== -->
 
