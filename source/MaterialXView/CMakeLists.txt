@@ -83,6 +83,9 @@ endif()
 if (MATERIALX_BUILD_GEN_MDL)
     LIST(APPEND MATERIALX_LIBRARIES MaterialXGenMdl)
 endif()
+if (MATERIALX_BUILD_GLTF)
+    LIST(APPEND MATERIALX_LIBRARIES MaterialXglTF)
+endif()
 
 target_link_libraries(
     MaterialXView

@@ -4,7 +4,9 @@
 #include <MaterialXRenderGlsl/TextureBaker.h>
 
 #include <MaterialXRender/CgltfLoader.h>
-#include <MaterialXRender/CgltfMaterialLoader.h>
+#if MATERIALX_BUILD_GLTF
+#include <MaterialXglTF/CgltfMaterialLoader.h>
+#endif
 #include <MaterialXRender/Harmonics.h>
 #include <MaterialXRender/OiioImageLoader.h>
 #include <MaterialXRender/StbImageLoader.h>
@@ -601,10 +603,16 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
     materialButton->set_callback([this]()
     {
         m_process_events = false;
-        std::string filename = ng::file_dialog({ { "mtlx", "MaterialX" }, { "gltf", "glTF" } }, false);
+        std::string filename;       
+#if defined(MATERIALX_BUILD_GLTF)
+        filename = ng::file_dialog({ { "mtlx", "MaterialX" }, { "gltf", "glTF" } }, false);
+#else
+        filename = ng::file_dialog({ { "mtlx", "MaterialX" } }, false);
+#endif
         if (!filename.empty())
         {
             mx::FilePath filePath(filename);
+#if defined(MATERIALX_BUILD_GLTF)
             if (filePath.getExtension() == "gltf")
             {
                 mx::MaterialLoaderPtr gltfMTLXLoader = mx::CgltfMaterialLoader::create();
@@ -635,6 +643,7 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
                 }
             }
             else
+#endif
             {
                 _materialFilename = filename;
                 loadDocument(_materialFilename, _stdLib);

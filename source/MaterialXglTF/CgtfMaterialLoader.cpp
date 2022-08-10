@@ -4,7 +4,7 @@
 #include <MaterialXCore/Library.h>
 #include <MaterialXFormat/XmlIo.h>
 #include <MaterialXFormat/Util.h>
-#include <MaterialXRender/CgltfMaterialLoader.h>
+#include <MaterialXglTF/CgltfMaterialLoader.h>
 
 #if defined(__GNUC__)
     #pragma GCC diagnostic push
