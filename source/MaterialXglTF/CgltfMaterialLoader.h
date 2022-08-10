@@ -5,7 +5,7 @@
 /// @file 
 /// GLTF material loader using the Cgltf library
 
-#include <MaterialXRender/Export.h>
+#include <MaterialXglTF/Export.h>
 #include <MaterialXCore/Document.h>
 
 MATERIALX_NAMESPACE_BEGIN
@@ -19,7 +19,7 @@ using CgltfMaterialLoaderPtr = std::shared_ptr<class CgltfMaterialLoader>;
 
 /// @class MaterialLoader
 /// Wrapper for loader to read materials as MaterialX
-class MX_RENDER_API MaterialLoader
+class MX_GLTF_API MaterialLoader
 {
   public:
     MaterialLoader() 
@@ -119,7 +119,7 @@ class MX_RENDER_API MaterialLoader
 
 /// @class CgltfMateralLoader
 /// Wrapper for loader to read materials from GLTF files using the Cgltf library.
-class MX_RENDER_API CgltfMaterialLoader : public MaterialLoader
+class MX_GLTF_API CgltfMaterialLoader : public MaterialLoader
 {
   public:
     CgltfMaterialLoader() 
