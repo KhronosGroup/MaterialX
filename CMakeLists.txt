@@ -207,6 +207,7 @@ endfunction(assign_source_group)
 # Propagate shared library setting to NanoGUI:
 if(MATERIALX_BUILD_SHARED_LIBS)
     set(BUILD_SHARED_LIBS "ON")
+    set(MATERIALX_BUILD_GLTF "OFF")
 else()
     set(BUILD_SHARED_LIBS "OFF")
 endif()
