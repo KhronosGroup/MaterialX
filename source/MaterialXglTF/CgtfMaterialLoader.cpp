@@ -617,8 +617,7 @@ NodePtr CgltfMaterialLoader::createTexture(DocumentPtr& doc, const std::string &
     {
         newTexture->addInputsFromNodeDef();
     }
-    newTexture->addInputFromNodeDef("file");
-    InputPtr fileInput = newTexture->getInput("file");
+    InputPtr fileInput = newTexture->addInputFromNodeDef("file");
     fileInput->setValue(fileName, "filename");
     if (!colorspace.empty())
     {
@@ -633,9 +632,7 @@ void CgltfMaterialLoader::setNormalMapInput(DocumentPtr materials, NodePtr shade
 {
     const cgltf_texture_view* textureView = static_cast<const cgltf_texture_view*>(textureViewIn);
 
-    shaderNode->addInputFromNodeDef(inputName);
-    InputPtr normalInput = shaderNode->getInput(inputName);
-
+    InputPtr normalInput = shaderNode->addInputFromNodeDef(inputName);
     if (normalInput)
     {
         cgltf_texture* texture = textureView ? textureView->texture : nullptr;
@@ -667,16 +664,17 @@ void CgltfMaterialLoader::setNormalMapInput(DocumentPtr materials, NodePtr shade
     }
 }
 
-void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
-                                       const Color3& colorFactor, float* alpha, const void* textureViewIn,
+void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNode, const std::string& colorInputName, 
+                                       const Color3& colorFactor, float* alpha, const std::string& alphaInputName, 
+                                       const void* textureViewIn,
                                        const std::string& inputImageNodeName)
 {
     const cgltf_texture_view* textureView = static_cast<const cgltf_texture_view*>(textureViewIn);
 
     ValuePtr color3Value = Value::createValue<Color3>(colorFactor);
-    shaderNode->addInputFromNodeDef(inputName);
-    InputPtr colorInput = shaderNode->getInput(inputName);
-    if (colorInput)
+    InputPtr colorInput = colorInputName.size() ? shaderNode->addInputFromNodeDef(colorInputName) : nullptr;    
+    InputPtr alphaInput = alphaInputName.size() ? shaderNode->addInputFromNodeDef(alphaInputName) : nullptr;
+    if (colorInput || alphaInput)
     {
         cgltf_texture* texture = textureView ? textureView->texture : nullptr;
         if (texture && texture->image)
@@ -685,19 +683,34 @@ void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNod
             imageNodeName = materials->createValidChildName(imageNodeName);
             std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
             NodePtr newTexture = createTexture(materials, imageNodeName, uri,
-                                               (alpha ? "color4" : "color3"), "srgb_texture");
-            colorInput->setAttribute("nodename", newTexture->getName());
-            // TODO: add modulation of texture if both value and texture are specified
-            colorInput->removeAttribute("value");
-            colorInput->setValueString(color3Value->getValueString());
-            if (alpha)
+                                               (alphaInput ? "color4" : "color3"), "srgb_texture");
+
+            if (colorInput)
             {
-                colorInput->setChannels("rgb");
+                colorInput->setAttribute("nodename", newTexture->getName());
+                colorInput->removeAttribute("value");
+                if (alphaInput)
+                {
+                    colorInput->setChannels("rgb");
+                }
+            }   
+            if (alphaInput)
+            {
+                alphaInput->setAttribute("nodename", newTexture->getName());
+                alphaInput->removeAttribute("value");
+                alphaInput->setChannels("a");
             }
         }
         else
         {
-            colorInput->setValueString(color3Value->getValueString());
+            if (colorInput)
+            {
+                colorInput->setValueString(color3Value->getValueString());
+            }
+            if (alphaInput)
+            {
+                alphaInput->setValue<float>(*alpha);
+            }
         }
     }
 }
@@ -708,8 +721,7 @@ void CgltfMaterialLoader::setFloatInput(DocumentPtr materials, NodePtr shaderNod
 {
     const cgltf_texture_view* textureView = static_cast<const cgltf_texture_view*>(textureViewIn);
 
-    shaderNode->addInputFromNodeDef(inputName);
-    InputPtr floatInput = shaderNode->getInput(inputName);
+    InputPtr floatInput = shaderNode->addInputFromNodeDef(inputName);
     if (floatInput)
     {
         cgltf_texture* texture = textureView ? textureView->texture : nullptr;
@@ -818,78 +830,36 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         // Create a surface material for the shader node
         NodePtr materialNode = _materials->addNode("surfacematerial", materialName, "material");
         InputPtr shaderInput = materialNode->addInput("surfaceshader", "surfaceshader");
-        shaderInput->setAttribute("nodename", shaderNode->getName());
-
-        // Parse unlit
-        if (use_unlit)
-        {
-            if (material->has_pbr_metallic_roughness)
-            {
-                cgltf_pbr_metallic_roughness& roughness = material->pbr_metallic_roughness;
-
-                // Parse base color
-                // TODO: Fix up as for base_color to modulate color+alpha if textured.
-                Color3 colorFactor(roughness.base_color_factor[0],
-                    roughness.base_color_factor[1],
-                    roughness.base_color_factor[2]);
-                float alpha = roughness.base_color_factor[3];
-                setColorInput(_materials, shaderNode, "emission_color",
-                    colorFactor, &alpha, &roughness.base_color_texture, "image_basecolor");
-
-                // Parse alpha which is actually opacity
-                shaderNode->addInputFromNodeDef("opacity");
-                InputPtr opacityInput = shaderNode->getInput("opacity");
-                if (opacityInput)
-                {
-                    opacityInput->setValue<float>(roughness.base_color_factor[3]);
-                }            
-                continue;
-            }
-        }
-
-        // Parse unmapped alpha parameters
-        //
-        shaderNode->addInputFromNodeDef("alpha_mode");
-        InputPtr alphaMode = shaderNode->getInput("alpha_mode");
-        if (alphaMode)
-        {
-            cgltf_alpha_mode alpha_mode = material->alpha_mode;
-            alphaMode->setValue<int>(static_cast<int>(alpha_mode));
-        }
-        shaderNode->addInputFromNodeDef("alpha_cutoff");
-        InputPtr alphaCutoff = shaderNode->getInput("alpha_cutoff");
-        if (alphaCutoff)
-        {
-            alphaCutoff->setValue<float>(material->alpha_cutoff);
-        }
+        shaderInput->setAttribute("nodename", shaderNode->getName());        
 
         if (material->has_pbr_metallic_roughness)
         {
+            StringVec colorAlphaInputs = { "base_color", "alpha", "emission_color", "opacity" };
+            size_t  colorAlphaInputOffset = use_unlit ? 2 : 0;
+
             cgltf_pbr_metallic_roughness& roughness = material->pbr_metallic_roughness;
 
+            // TODO: Fix to handle color4 input image routing to alpha as well
+            // as color
             // Parse base color
             Color3 colorFactor(roughness.base_color_factor[0],
                 roughness.base_color_factor[1],
                 roughness.base_color_factor[2]);
             float alpha = roughness.base_color_factor[3];
-            setColorInput(_materials, shaderNode, "base_color",
-                colorFactor, &alpha, &roughness.base_color_texture, "image_basecolor");
+            setColorInput(_materials, shaderNode, colorAlphaInputs[colorAlphaInputOffset],
+                colorFactor, &alpha, colorAlphaInputs[colorAlphaInputOffset+1], 
+                &roughness.base_color_texture, "image_basecolor");
 
-            // Parse alpha
-            shaderNode->addInputFromNodeDef("alpha");
-            InputPtr alphaInput = shaderNode->getInput("alpha");
-            if (alphaInput)
+            // Ignore any other information unsupported by unlit.
+            if (use_unlit)
             {
-                alphaInput->setValue<float>(roughness.base_color_factor[3]);
+                continue;
             }
 
             // Parse metalic, roughness, and occlusion
-            shaderNode->addInputFromNodeDef("metallic");
-            shaderNode->addInputFromNodeDef("roughness");
-            shaderNode->addInputFromNodeDef("occlusion");
-            InputPtr metallicInput = shaderNode->getInput("metallic");
-            InputPtr roughnessInput = shaderNode->getInput("roughness");
-            InputPtr occlusionInput = shaderNode->getInput("occlusion");
+            InputPtr metallicInput = shaderNode->addInputFromNodeDef("metallic");
+            InputPtr roughnessInput = shaderNode->addInputFromNodeDef("roughness");
+            InputPtr occlusionInput = shaderNode->addInputFromNodeDef("occlusion");
 
             // Check for occlusion/metallic/roughness texture
             cgltf_texture_view& textureView = roughness.metallic_roughness_texture;
@@ -903,45 +873,22 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 NodePtr textureNode = createTexture(_materials, imageNodeName, uri,
                     "vector3", EMPTY_STRING);
 
-                // Add extraction nodes. Note that order matters
-                StringVec extractNames =
+                // Map image channesl to inputs
+                StringVec indexName = { "x", "y", "z" };
+                std::vector<InputPtr> inputs = { occlusionInput, roughnessInput, metallicInput };
+                for (size_t i = 0; i < inputs.size(); i++)
                 {
-                        _materials->createValidChildName("extract_occlusion"),
-                        _materials->createValidChildName("extract_roughness"),
-                        _materials->createValidChildName("extract_metallic")
-                };
-                std::vector<InputPtr> inputs =
-                {
-                    occlusionInput, roughnessInput, metallicInput
-                };
-                for (size_t i = 0; i < extractNames.size(); i++)
-                {
-                    NodePtr extractNode = _materials->addNode("extract", extractNames[i], "float");
-                    extractNode->setAttribute("nodedef", "ND_extract_vector3");
-                    if (_generateFullDefinitions)
-                    {
-                        extractNode->addInputsFromNodeDef();
-                    }
-                    else
-                    {
-                        extractNode->addInputFromNodeDef("in");
-                        extractNode->addInputFromNodeDef("index");
-                    }
-                    InputPtr extractInput = extractNode->getInput("in");
-                    extractInput->setAttribute("nodename", textureNode->getName());
-                    extractInput->setType("vector3");
-                    extractInput->setValueString("1.0, 1.0, 1.0");
-                    extractNode->getInput("index")->setAttribute("value", std::to_string(i));
                     if (inputs[i])
                     {
-                        inputs[i]->setAttribute("nodename", extractNode->getName());
+                        inputs[i]->setAttribute("nodename", textureNode->getName());
                         inputs[i]->setType("float");
+                        inputs[i]->setChannels(indexName[i]);
                     }
                 }
 
                 // See note about both "value" and "nodename" being
                 // specified.
-                metallicInput->setValue<float>(roughness.metallic_factor);;
+                metallicInput->setValue<float>(roughness.metallic_factor);
                 roughnessInput->setValue<float>(roughness.roughness_factor);
             }
             else
@@ -950,6 +897,28 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 roughnessInput->setValue<float>(roughness.roughness_factor);
             }
         }
+
+        // Parse unmapped alpha parameters
+        //
+        InputPtr alphaMode = shaderNode->addInputFromNodeDef("alpha_mode");
+        if (alphaMode)
+        {
+            cgltf_alpha_mode alpha_mode = material->alpha_mode;
+            alphaMode->setValue<int>(static_cast<int>(alpha_mode));
+        }
+        InputPtr alphaCutoff = shaderNode->addInputFromNodeDef("alpha_cutoff");
+        if (alphaCutoff)
+        {
+            alphaCutoff->setValue<float>(material->alpha_cutoff);
+        }
+
+        // Color+alpha input names. First 2 are for pbr, next 2 are for unlit
+        StringVec colorAlphaInputs = { "base_color",  "alpha", "emission_color", "opacity" };
+        size_t colorAlphaInputOffset = 0;
+        if (use_unlit)
+        {
+            colorAlphaInputOffset = 2;
+        }         
 
         // Normal texture
         setNormalMapInput(_materials, shaderNode, "normal", &material->normal_texture, "image_normal");
@@ -963,7 +932,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                                sheen.sheen_color_factor[1],
                                sheen.sheen_color_factor[2]);
             setColorInput(_materials, shaderNode, "sheen_color",
-                colorFactor, nullptr, &sheen.sheen_color_texture, "image_sheen");
+                colorFactor, nullptr, EMPTY_STRING, &sheen.sheen_color_texture, "image_sheen");
 
             setFloatInput(_materials, shaderNode, "sheen_roughness",
                 sheen.sheen_roughness_factor, &sheen.sheen_roughness_texture,
@@ -1035,7 +1004,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 specular.specular_color_factor[1],
                 specular.specular_color_factor[2]);
             setColorInput(_materials, shaderNode, "specular_color",
-                colorFactor, nullptr,
+                colorFactor, nullptr, EMPTY_STRING,
                 &specular.specular_color_texture, 
                 "image_specularcolor");
 
@@ -1050,8 +1019,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         if (material->has_ior)
         {
             cgltf_ior& ior = material->ior;
-            shaderNode->addInputFromNodeDef("ior");
-            InputPtr iorInput = shaderNode->getInput("ior");
+            InputPtr iorInput = shaderNode->addInputFromNodeDef("ior");
             if (iorInput)
             {
                 iorInput->setValue<float>(ior.ior);
@@ -1067,13 +1035,12 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
             material->emissive_factor[1],
             material->emissive_factor[2]);
         setColorInput(_materials, shaderNode, "emissive",
-            colorFactor, nullptr, &material->emissive_texture, "image_emission");
+            colorFactor, nullptr, EMPTY_STRING, &material->emissive_texture, "image_emission");
 
         if (material->has_emissive_strength)
         {
             cgltf_emissive_strength& emissive_strength = material->emissive_strength;
-            shaderNode->addInputFromNodeDef("emissive_strength");
-            InputPtr input = shaderNode->getInput("emissive_strength");
+            InputPtr input = shaderNode->addInputFromNodeDef("emissive_strength");
             if (input)
             {
                 input->setValue<float>(emissive_strength.emissive_strength);
@@ -1105,7 +1072,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 volume.attenuation_color[1],
                 volume.attenuation_color[2]);
             setColorInput(_materials, shaderNode, "attenuation_color",
-                          attenFactor, nullptr, nullptr, EMPTY_STRING);
+                          attenFactor, nullptr, EMPTY_STRING, nullptr, EMPTY_STRING);
 
             // Untextured attenuation distance
             setFloatInput(_materials, shaderNode, "attenuation_distance",
