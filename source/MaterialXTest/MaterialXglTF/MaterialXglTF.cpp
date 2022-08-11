@@ -54,12 +54,8 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
     bool createAssignments = true;
     bool fullDefinition = false;
     const std::string GLTF_EXTENSION("gltf");
-    mx::FilePath rootPath = mx::FilePath::getCurrentPath() / "resources/Materials/TestSuite/glTF/2.0/";
-    std::cout << "Scan gltF rootPath: " << rootPath.asString() << std::endl;
-    //if (rootPath.exists())
-    {
-    //    std::cout << "Cannot find any files to convert." << std::endl;
-    }
+    const mx::FilePath currentPath = mx::FilePath::getCurrentPath();
+    mx::FilePath rootPath = currentPath / "resources/Materials/TestSuite/glTF/2.0/";
     for (const mx::FilePath& dir : rootPath.getSubDirectories())
     {
         if (std::string::npos != dir.asString().find("glTF-Binary") || 
@@ -68,10 +64,8 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
         {
             continue;
         }
-        //std::cout << "Scan dir: " << dir.asString() << std::endl;
         for (const mx::FilePath& gltfFile : dir.getFilesInDirectory(GLTF_EXTENSION))
         {
-            //std::cout << "- Scan file : " << gltfFile.asString() << std::endl;
             mx::FilePath fullPath = dir / gltfFile;
             mx::DocumentPtr materials = glTF2Mtlx(fullPath, libraries, createAssignments, fullDefinition);
             if (materials)

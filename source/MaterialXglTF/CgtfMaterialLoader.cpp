@@ -810,8 +810,13 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         }
         else
         {
-            materialName = material->name;
-            shaderName = "SHADER_" + materialName;
+            StringMap invalidTokens;
+            invalidTokens["__"] = "_";
+            string origName = material->name;
+            origName = replaceSubstrings(origName, invalidTokens);
+            
+            materialName = "MAT_" + origName;
+            shaderName = "SHD_" + origName;
         }
         materialName = _materials->createValidChildName(materialName);
         string* name = new string(materialName);
