@@ -784,11 +784,13 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
 	    cgltf_extension* extensions;
     } cgltf_material;
     */
-    if (data->materials_count)
+    if (!data->materials_count)
     {
-        _materials = Document::createDocument<Document>();
-        _materials->importLibrary(_definitions);
+        _materials = nullptr;
+        return;
     }
+    _materials = Document::createDocument<Document>();
+    _materials->importLibrary(_definitions);
 
     for (size_t m = 0; m < data->materials_count; m++)
     {
