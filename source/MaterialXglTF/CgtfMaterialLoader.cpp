@@ -805,7 +805,7 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
 
         shaderName = _materials->createValidChildName(shaderName);
 
-        // TODO: Handle unlit
+        // Check for unlit
         bool use_unlit = material->unlit;
         string shaderCategory = use_unlit ? "surface_unlit" : "gltf_pbr";
         NodePtr shaderNode = _materials->addNode(shaderCategory, shaderName, "surfaceshader");
@@ -820,9 +820,31 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         InputPtr shaderInput = materialNode->addInput("surfaceshader", "surfaceshader");
         shaderInput->setAttribute("nodename", shaderNode->getName());
 
+        // Parse unlit
         if (use_unlit)
         {
-            continue;
+            if (material->has_pbr_metallic_roughness)
+            {
+                cgltf_pbr_metallic_roughness& roughness = material->pbr_metallic_roughness;
+
+                // Parse base color
+                // TODO: Fix up as for base_color to modulate color+alpha if textured.
+                Color3 colorFactor(roughness.base_color_factor[0],
+                    roughness.base_color_factor[1],
+                    roughness.base_color_factor[2]);
+                float alpha = roughness.base_color_factor[3];
+                setColorInput(_materials, shaderNode, "emission_color",
+                    colorFactor, &alpha, &roughness.base_color_texture, "image_basecolor");
+
+                // Parse alpha which is actually opacity
+                shaderNode->addInputFromNodeDef("opacity");
+                InputPtr opacityInput = shaderNode->getInput("opacity");
+                if (opacityInput)
+                {
+                    opacityInput->setValue<float>(roughness.base_color_factor[3]);
+                }            
+                continue;
+            }
         }
 
         // Parse unmapped alpha parameters
