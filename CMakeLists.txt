@@ -238,7 +238,6 @@ endif()
 if(MATERIALX_BUILD_GLTF)
     add_definitions(-DMATERIALX_BUILD_GLTF)
     add_subdirectory(source/MaterialXglTF)
-    set(MATERIALX_BUILD_RENDER ON)
 endif()
 
 # Add rendering and viewer subdirectories

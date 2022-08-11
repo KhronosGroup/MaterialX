@@ -19,8 +19,8 @@ add_definitions(-DMATERIALX_GLTF_EXPORTS)
 
 target_link_libraries(
     MaterialXglTF
-    MaterialXRender
-    MaterialXGenShader
+    MaterialXCore
+    MaterialXFormat
     ${CMAKE_DL_LIBS})
 
 set_target_properties(
