@@ -912,14 +912,6 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
             alphaCutoff->setValue<float>(material->alpha_cutoff);
         }
 
-        // Color+alpha input names. First 2 are for pbr, next 2 are for unlit
-        StringVec colorAlphaInputs = { "base_color",  "alpha", "emission_color", "opacity" };
-        size_t colorAlphaInputOffset = 0;
-        if (use_unlit)
-        {
-            colorAlphaInputOffset = 2;
-        }         
-
         // Normal texture
         setNormalMapInput(_materials, shaderNode, "normal", &material->normal_texture, "image_normal");
 
