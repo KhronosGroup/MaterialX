@@ -269,9 +269,9 @@
 	
 <!--
     Node: <gltf_coloredimage> Supplemental Node
-    Modulate a color4 tiledimage color image by an input color. Default binding for color is geometry color 0.
+    Multiply a color4 tiledimage color image by an input color. Default color is 1,1,1,1 which results in no change to the image.
   -->
-  <nodedef name="ND_colortiledimage" node="gltf_coloredimage" version="0.0.1" isdefaultversion="true" nodegroup="texture2d">
+  <nodedef name="ND_gltf_colortiledimage" node="gltf_coloredimage" version="0.0.1" isdefaultversion="true" nodegroup="texture2d">
     <input name="file" type="filename" uniform="true" value="" uifolder="Image" />
     <input name="default" type="color4" value="0, 0, 0, 0" uifolder="Image" />
     <input name="texcoord" type="vector2" value="0, 0" defaultgeomprop="UV0" uifolder="Image" />	  
@@ -285,15 +285,13 @@
     <input name="frameoffset" type="integer" value="0" uifolder="Image" />
     <input name="frameendaction" type="string" uniform="true" value="constant" uifolder="Image" />
     <input name="color" type="color4" value="1, 1, 1, 1" uifolder="Color" />
-    <input name="colormix" type="float" value="0" uifolder="Color" />
-    <input name="alphamix" type="float" value="0" uifolder="Color" />
     <output name="out_color" type="color3" value="0, 0, 0" />
     <output name="out_alpha" type="float" value="0" />
   </nodedef>
 
-  <implementation name="IMPL_colortiledimage" nodedef="ND_colortiledimage" nodegraph="NG_colortiledimage" />
+  <implementation name="IMPL_gltf_colortiledimage" nodedef="ND_gltf_colortiledimage" nodegraph="NG_gltf_colortiledimage" />
 
-  <nodegraph name="NG_colortiledimage" >
+  <nodegraph name="NG_gltf_colortiledimage" >
     <input name="file" type="filename" uniform="true" value="" />
     <input name="default" type="color4" value="0, 0, 0, 0" />
     <input name="index" type="integer" value="0" />
@@ -306,24 +304,6 @@
     <input name="frameoffset" type="integer" value="0" />
     <input name="frameendaction" type="string" uniform="true" value="constant" />
     <input name="color" type="color4" value="1, 1, 1, 1" />
-    <input name="colormix" type="float" value="0" />
-    <input name="alphamix" type="float" value="0" />
-    <swizzle name="color_alpha" type="float" >
-      <input name="in" type="color4" interfacename="color" />
-      <input name="channels" type="string" uniform="true" value="a" />
-    </swizzle>
-    <swizzle name="color_color" type="color3"  >
-      <input name="in" type="color4" interfacename="color"/>
-      <input name="channels" type="string" uniform="true" value="rgb" />
-    </swizzle>
-    <swizzle name="image_alpha" type="float" >
-      <input name="in" type="color4" nodename="tiledimage" />
-      <input name="channels" type="string" uniform="true" value="a" />
-    </swizzle>
-    <swizzle name="image_color" type="color3" >
-      <input name="in" type="color4" nodename="tiledimage" />
-      <input name="channels" type="string" uniform="true" value="rgb" />
-    </swizzle>
     <tiledimage name="tiledimage" type="color4" >
       <input name="file" type="filename" uniform="true" interfacename="file" value="" />
       <input name="default" type="color4" interfacename="default" value="0, 0, 0, 0" />
@@ -337,18 +317,17 @@
       <input name="frameoffset" type="integer" uniform="true" interfacename="frameoffset" value="0" />
       <input name="frameendaction" type="string" uniform="true" interfacename="frameendaction" value="constant" />
     </tiledimage>
-    <mix name="mix_color" type="color3" >
-      <input name="fg" type="color3" nodename="color_color" />
-      <input name="bg" type="color3" nodename="image_color" />
-      <input name="mix" type="float" interfacename="colormix" value="0" />
-    </mix>
-    <mix name="mix_alpha" type="float" >
-      <input name="fg" type="float" nodename="color_alpha" />
-      <input name="bg" type="float" nodename="image_alpha" />
-      <input name="mix" type="float" interfacename="alphamix" value="0" />
-    </mix>
-    <output name="out_color" type="color3" nodename="mix_color" />
-    <output name="out_alpha" type="float" nodename="mix_alpha" />
+	<!-- Note need to extrac channels on inputs and output channel attributes are not currently supported -->
+    <multiply name="modulate_color" type="color3" >
+      <input name="in1" type="color3" interfacename="color" channels="rgb" />
+      <input name="in2" type="color3" nodename="tiledimage" channels="rgb" />
+    </multiply>
+    <multiply name="modulate_alpha" type="float" >
+      <input name="in1" type="float" interfacename="color" channels="a"/>
+      <input name="in2" type="float" nodename="tiledimage" channels="a"/>
+    </multiply>
+    <output name="outcolor" type="color3" nodename="modulate_color" />
+    <output name="outa" type="float" nodename="modulate_alpha" />
   </nodegraph>		
 	
 </materialx>
