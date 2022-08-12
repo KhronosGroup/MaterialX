@@ -285,8 +285,8 @@
     <input name="frameoffset" type="integer" value="0" uifolder="Image" />
     <input name="frameendaction" type="string" uniform="true" value="constant" uifolder="Image" />
     <input name="color" type="color4" value="1, 1, 1, 1" uifolder="Color" />
-    <output name="out_color" type="color3" value="0, 0, 0" />
-    <output name="out_alpha" type="float" value="0" />
+    <output name="outcolor" type="color3" value="0, 0, 0" />
+    <output name="outa" type="float" value="0" />
   </nodedef>
 
   <implementation name="IMPL_gltf_colortiledimage" nodedef="ND_gltf_colortiledimage" nodegraph="NG_gltf_colortiledimage" />
@@ -317,7 +317,7 @@
       <input name="frameoffset" type="integer" uniform="true" interfacename="frameoffset" value="0" />
       <input name="frameendaction" type="string" uniform="true" interfacename="frameendaction" value="constant" />
     </tiledimage>
-	<!-- Note need to extrac channels on inputs and output channel attributes are not currently supported -->
+	<!-- Note need to extra channels on inputs and output channel attributes are not currently supported -->
     <multiply name="modulate_color" type="color3" >
       <input name="in1" type="color3" interfacename="color" channels="rgb" />
       <input name="in2" type="color3" nodename="tiledimage" channels="rgb" />
