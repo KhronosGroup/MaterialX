@@ -293,6 +293,7 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
 	    material->extensions = nullptr;
         material->emissive_texture.texture = nullptr;
         material->normal_texture.texture = nullptr;
+        material->occlusion_texture.texture = nullptr;
 
         string* name = new string(pbrNode->getNamePath());
         material->name = const_cast<char*>(name->c_str());
@@ -325,6 +326,17 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
             roughness.base_color_factor[3] = 1.0;
 
             imageIndex++;
+
+            // Pull off color from gltf_coloredImage node
+            ValuePtr value = pbrNode->getInputValue("color");
+            if (value && value->isA<Color4>())
+            {
+                Color4 color = value->asA<Color4>();
+                roughness.base_color_factor[0] = color[0];
+                roughness.base_color_factor[1] = color[1];
+                roughness.base_color_factor[2] = color[2];
+                roughness.base_color_factor[3] = color[3];
+            }
         }
         else
         {
@@ -363,6 +375,7 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
         NodePtr ormNode = nullptr;
         imageNode = nullptr;
         const string extractCategory("extract");
+        string mrFileName;
         for (size_t e=0; e<3; e++)
         { 
             const string& inputName = extractInputs[e];
@@ -370,28 +383,51 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
             if (pbrInput)
             {
                 // Read past any extract node
-                NodePtr extractNode = pbrNode->getConnectedNode(inputName);
-                if (extractNode && extractNode->getCategory() == extractCategory)
+                NodePtr connectedNode = pbrNode->getConnectedNode(inputName);
+                if (connectedNode)
                 {
-                    imageNode = extractNode->getConnectedNode("in");
+                    if (connectedNode->getCategory() == extractCategory)
+                    {
+                        imageNode = connectedNode->getConnectedNode("in");
+                    }
+                    else
+                    {
+                        imageNode = connectedNode;
+                    }
                 }
 
                 if (imageNode)
                 {
-                    // Only create the ORM texture once
-                    if (!ormNode)
+                    InputPtr fileInput = imageNode->getInput("file");
+                    filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+                        fileInput->getValueString() : EMPTY_STRING;
+                    if (inputName != "occlusion")
                     {
-                        ormNode = imageNode;
+                        mrFileName = filename;
 
-                        InputPtr fileInput = imageNode->getInput("file");
-                        filename = fileInput && fileInput->getAttribute("type") == "filename" ?
-                            fileInput->getValueString() : EMPTY_STRING;
-
-                        cgltf_texture* texture = &(textureList[imageIndex]);
-                        roughness.metallic_roughness_texture.texture = texture;
-                        initialize_cgtlf_texture(*texture, imageNode->getNamePath(), filename,
-                            &(imageList[imageIndex]));
-                        imageIndex++;
+                        // Only create the ORM texture once
+                        if (!ormNode)
+                        {
+                            ormNode = imageNode;
+                            cgltf_texture* texture = &(textureList[imageIndex]);
+                            roughness.metallic_roughness_texture.texture = texture;
+                            initialize_cgtlf_texture(*texture, imageNode->getNamePath(), filename,
+                                &(imageList[imageIndex]));
+                            imageIndex++;
+                        }
+                    }
+                    else
+                    {
+                        // If the occlusion file is not the same as the metallic roughness,
+                        // then create another texture.
+                        if (mrFileName != filename)
+                        {
+                            cgltf_texture* texture = &(textureList[imageIndex]);
+                            material->occlusion_texture.texture = texture;
+                            initialize_cgtlf_texture(*texture, imageNode->getNamePath(), filename,
+                                &(imageList[imageIndex]));
+                            imageIndex++;
+                        }
                     }
 
                     if (roughnessInputs[e])
@@ -768,14 +804,11 @@ void CgltfMaterialLoader::setFloatInput(DocumentPtr materials, NodePtr shaderNod
         cgltf_texture* texture = textureView ? textureView->texture : nullptr;
         if (texture && texture->image)
         {
-            std::string imageNodeName = texture->image->name ? texture->image->name :
-                "image_sheen_roughness";
-            imageNodeName = materials->createValidChildName(inputImageNodeName);
+            std::string imageNodeName = materials->createValidChildName(inputImageNodeName);
             std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
             NodePtr newTexture = createTexture(materials, imageNodeName, uri,
                 "float", EMPTY_STRING);
             floatInput->setAttribute("nodename", newTexture->getName());
-            // See above node about "value" + "nodename" both being specified.
             floatInput->setValue<float>(floatFactor);
         }
         else
@@ -880,11 +913,34 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         InputPtr shaderInput = materialNode->addInput("surfaceshader", "surfaceshader");
         shaderInput->setAttribute("nodename", shaderNode->getName());        
 
-        bool haveSeparateOcclusion = !use_unlit && (nullptr != material->occlusion_texture.texture);
-        if (haveSeparateOcclusion)
+        // Handle separate occlusion texture
+        bool haveSeparateOcclusion = false;
+        cgltf_texture* occlusion_texture = material->occlusion_texture.texture;
+        if (!use_unlit && occlusion_texture)
         {
-            InputPtr occlusionInput = shaderNode->addInputFromNodeDef("occlusion");
-            setFloatInput(_materials, shaderNode, "occlusion", 1.0, &material->occlusion_texture, "image_occlusion");
+            std::string oURI;
+            std::string mrURI;
+            if (occlusion_texture->image)
+            {
+                oURI = occlusion_texture->image->uri ? occlusion_texture->image->uri : SPACE_STRING;
+            }
+            if (!oURI.empty() && material->has_pbr_metallic_roughness)
+            {
+                cgltf_pbr_metallic_roughness& roughness = material->pbr_metallic_roughness;
+                cgltf_texture_view& textureView = roughness.metallic_roughness_texture;
+                cgltf_texture* texture = textureView.texture;
+                if (texture && texture->image)
+                {
+                    mrURI = texture->image->uri ? texture->image->uri : SPACE_STRING;
+                }
+
+                if (mrURI != oURI)
+                {
+                    haveSeparateOcclusion = true;
+                    InputPtr occlusionInput = shaderNode->addInputFromNodeDef("occlusion");
+                    setFloatInput(_materials, shaderNode, "occlusion", 1.0, &material->occlusion_texture, "image_occlusion");
+                }
+            }
         }
 
         if (material->has_pbr_metallic_roughness)

@@ -82,6 +82,12 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
                     const std::string outputFileName = fullPath.asString() + "_converted.mtlx";
                     std::cout << "Wrote " << std::to_string(nodes.size()) << " materials to file : " << outputFileName << std::endl;
                     mx::writeToXmlFile(materials, outputFileName, &writeOptions);
+
+                    const std::string outputFileName2 = outputFileName + "_converted.gltf";
+                    if (mtlx2glTF(outputFileName2, materials))
+                    {
+                        std::cout << "Wrote MTLX materials to glTF file : " << outputFileName2 << std::endl;
+                    }
                 }
             }
         }

@@ -289,9 +289,7 @@
     <output name="outa" type="float" value="0" />
   </nodedef>
 
-  <implementation name="IMPL_gltf_colortiledimage" nodedef="ND_gltf_colortiledimage" nodegraph="NG_gltf_colortiledimage" />
-
-  <nodegraph name="NG_gltf_colortiledimage" >
+  <nodegraph name="NG_gltf_colortiledimage" nodedef="ND_gltf_colortiledimage" >
     <input name="file" type="filename" uniform="true" value="" />
     <input name="default" type="color4" value="0, 0, 0, 0" />
     <input name="index" type="integer" value="0" />
