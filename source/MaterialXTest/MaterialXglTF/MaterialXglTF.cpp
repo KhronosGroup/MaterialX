@@ -73,6 +73,12 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
                 std::vector<mx::NodePtr> nodes = materials->getMaterialNodes();
                 if (nodes.size())
                 {
+                    std::string message;
+                    if (!materials->validate(&message))
+                    {
+                        std::cerr << "*** Validation warnings document created from: " << fullPath.asString() << " ***" << std::endl;
+                        std::cerr << message;
+                    }
                     const std::string outputFileName = fullPath.asString() + "_converted.mtlx";
                     std::cout << "Wrote " << std::to_string(nodes.size()) << " materials to file : " << outputFileName << std::endl;
                     mx::writeToXmlFile(materials, outputFileName, &writeOptions);

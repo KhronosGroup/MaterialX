@@ -317,14 +317,29 @@
       <input name="frameoffset" type="integer" uniform="true" interfacename="frameoffset" value="0" />
       <input name="frameendaction" type="string" uniform="true" interfacename="frameendaction" value="constant" />
     </tiledimage>
-	<!-- Note need to extra channels on inputs and output channel attributes are not currently supported -->
-    <multiply name="modulate_color" type="color3" >
-      <input name="in1" type="color3" interfacename="color" channels="rgb" />
-      <input name="in2" type="color3" nodename="tiledimage" channels="rgb" />
+    <separate4 name="separate_color" type="multioutput">
+      <input name="in" type="color4" nodename="tiledimage" />
+    </separate4>
+    <separate4 name="separate_image" type="multioutput">
+      <input name="in" type="color4" interfacename="color" />
+    </separate4>
+    <combine3 name="combine_image" type="color3">
+      <input name="in1" type="float" nodename="separate_image" output="outr"/>
+      <input name="in2" type="float" nodename="separate_image" output="outg"/>
+      <input name="in3" type="float" nodename="separate_image" output="outb"/>
+    </combine3>    
+    <combine3 name="combine_color" type="color3">
+      <input name="in1" type="float" nodename="separate_color" output="outr"/>
+      <input name="in2" type="float" nodename="separate_color" output="outg"/>
+      <input name="in3" type="float" nodename="separate_color" output="outb"/>
+    </combine3>    
+	  <multiply name="modulate_color" type="color3">
+      <input name="in1" type="color3" nodename="combine_color" />
+      <input name="in2" type="color3" nodename="combine_image" />
     </multiply>
-    <multiply name="modulate_alpha" type="float" >
-      <input name="in1" type="float" interfacename="color" channels="a"/>
-      <input name="in2" type="float" nodename="tiledimage" channels="a"/>
+    <multiply name="modulate_alpha" type="float">
+      <input name="in1" type="float" nodename="separate_color" output="outa"/>
+      <input name="in2" type="float" nodename="separate_image" output="outa"/>
     </multiply>
     <output name="outcolor" type="color3" nodename="modulate_color" />
     <output name="outa" type="float" nodename="modulate_alpha" />
