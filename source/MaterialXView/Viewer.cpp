@@ -5,7 +5,7 @@
 
 #include <MaterialXRender/CgltfLoader.h>
 #if MATERIALX_BUILD_GLTF
-#include <MaterialXglTF/CgltfMaterialLoader.h>
+#include <MaterialXglTF/CgltfMaterialHandler.h>
 #endif
 #include <MaterialXRender/Harmonics.h>
 #include <MaterialXRender/OiioImageLoader.h>
@@ -615,7 +615,7 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
 #if defined(MATERIALX_BUILD_GLTF)
             if (filePath.getExtension() == "gltf")
             {
-                mx::MaterialLoaderPtr gltfMTLXLoader = mx::CgltfMaterialLoader::create();
+                mx::MaterialHandlerPtr gltfMTLXLoader = mx::CgltfMaterialHandler::create();
                 gltfMTLXLoader->setDefinitions(_stdLib);
                 gltfMTLXLoader->setGenerateAssignments(true);
                 bool loadedMaterial = gltfMTLXLoader->load(filename);

@@ -1,6 +1,6 @@
 
-#ifndef MATERIALX_CGLTF_MATERIALLOADER_H
-#define MATERIALX_CGLTF_MATERIALLOADER_H
+#ifndef MATERIALX_CGLTF_MaterialHandler_H
+#define MATERIALX_CGLTF_MaterialHandler_H
 
 /// @file 
 /// GLTF material loader using the Cgltf library
@@ -11,26 +11,26 @@
 
 MATERIALX_NAMESPACE_BEGIN
 
-class MaterialLoader;
-class CgltfMaterialLoader;
+class MaterialHandler;
+class CgltfMaterialHandler;
 
 /// Shared pointer to a CgltfMateralLoader
-using MaterialLoaderPtr = std::shared_ptr<class MaterialLoader>;
-using CgltfMaterialLoaderPtr = std::shared_ptr<class CgltfMaterialLoader>;
+using MaterialHandlerPtr = std::shared_ptr<class MaterialHandler>;
+using CgltfMaterialHandlerPtr = std::shared_ptr<class CgltfMaterialHandler>;
 
-/// @class MaterialLoader
-/// Wrapper for loader to read materials as MaterialX
-class MX_GLTF_API MaterialLoader
+/// @class MaterialHandler
+/// Wrapper for handler to convert materials to / from MaterialX
+class MX_GLTF_API MaterialHandler
 {
   public:
-    MaterialLoader() 
-        : _generateFullDefinitions(true)
+    MaterialHandler() 
+        : _generateFullDefinitions(false)
         , _generateAssignments(false)
       {}
 
-    virtual ~MaterialLoader() = default;
+    virtual ~MaterialHandler() = default;
 
-    /// Load materialsfrom a given file
+    /// Load materials from a given file
     virtual bool load(const FilePath& filePath) = 0;
 
     /// Save materials to a given file
@@ -120,22 +120,22 @@ class MX_GLTF_API MaterialLoader
 
 /// @class CgltfMateralLoader
 /// Wrapper for loader to read materials from GLTF files using the Cgltf library.
-class MX_GLTF_API CgltfMaterialLoader : public MaterialLoader
+class MX_GLTF_API CgltfMaterialHandler : public MaterialHandler
 {
   public:
-    CgltfMaterialLoader() 
-        : MaterialLoader()
+    CgltfMaterialHandler() 
+        : MaterialHandler()
     {
         _extensions = { "glb", "GLB", "gltf", "GLTF" };
     }
-    virtual ~CgltfMaterialLoader() 
+    virtual ~CgltfMaterialHandler() 
     {
         _materials = nullptr;
     }
 
 
     /// Create a new loader
-    static MaterialLoaderPtr create() { return std::make_shared<CgltfMaterialLoader>(); }
+    static MaterialHandlerPtr create() { return std::make_shared<CgltfMaterialHandler>(); }
 
     /// Load materials from file path
 
@@ -159,13 +159,17 @@ class MX_GLTF_API CgltfMaterialLoader : public MaterialLoader
     NodePtr createColoredTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
                                  const Color4& color, const std::string & colorspace);
     NodePtr createTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
-                          const std::string & textureType, const std::string & colorspace);
+                          const std::string & textureType, const std::string & colorspace, 
+                          const std::string& nodeType = "gltf_image");
     void    setColorInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
                           const Color3& color, float alpha, const std::string& alphaInputName, 
                           const void* textureView, const std::string& inputImageNodeName);
     void    setFloatInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
                           float floatFactor, const void* textureView,
                           const std::string& inputImageNodeName);
+    void    setVector3Input(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
+                            const Vector3& vecFactor, const void* textureViewIn,
+                            const std::string& inputImageNodeName);
     void    setNormalMapInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
                               const void* textureViewIn, const std::string& inputImageNodeName);
 

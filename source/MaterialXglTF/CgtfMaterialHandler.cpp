@@ -4,7 +4,7 @@
 #include <MaterialXCore/Library.h>
 #include <MaterialXFormat/XmlIo.h>
 #include <MaterialXFormat/Util.h>
-#include <MaterialXglTF/CgltfMaterialLoader.h>
+#include <MaterialXglTF/CgltfMaterialHandler.h>
 
 #if defined(__GNUC__)
     #pragma GCC diagnostic push
@@ -45,8 +45,13 @@ MATERIALX_NAMESPACE_BEGIN
 
 namespace
 {
+const float TO_DEGREE = 180.0f / 3.1415926535f;
+//const float TO_RADIAN = 3.1415926535f / 180.0f;
 const std::string SPACE_STRING = " ";
-using GLTFMaterialMeshList = std::unordered_map<string, string>;
+const std::string IN_STRING = "in";
+const std::string FLOAT_STRING = "float";
+const std::string VEC3_STRING = "vector3";
+using GLTFMaterialMeshList = std::unordered_map<string,string>;
 const std::string DEFAULT_NODE_PREFIX = "NODE_";
 const std::string DEFAULT_MESH_PREFIX = "MESH_";
 const std::string DEFAULT_MATERIAL_NAME = "MATERIAL_0";
@@ -84,7 +89,7 @@ void initialize_cgtlf_texture(cgltf_texture& texture, const string& name, const 
     texture.image->uri = const_cast<char*>((new string(uri))->c_str());
 }
 
-void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn, FilePath& path, unsigned int nodeCount,
+void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, StringSet& materialCPVList, void* cnodeIn, FilePath& path, unsigned int nodeCount,
                           unsigned int meshCount)
 {
     cgltf_node* cnode = static_cast<cgltf_node*>(cnodeIn);
@@ -109,6 +114,26 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
             cgltf_material* material = prim->material;
             if (material)
             {
+                // Check for CPV
+                bool requiresCPV = false;
+                for (cgltf_size primitiveIndex = 0; primitiveIndex < cmesh->primitives_count; ++primitiveIndex)
+                {
+                    cgltf_primitive* primitive = &cmesh->primitives[primitiveIndex];
+                    if (!primitive)
+                    {
+                        continue;
+                    }
+                    for (cgltf_size attr = 0; attr < primitive->attributes_count; attr++)
+                    {
+                        cgltf_attribute* attribute = &primitive->attributes[attr];
+                        if (attribute->type == cgltf_attribute_type_color)
+                        {
+                            requiresCPV = true;
+                            break;
+                        }
+                    }
+                }
+
                 // Add reference to mesh (by name) to material 
                 string stringPath = path.asString(FilePath::FormatPosix);
                 string materialName = material->name;
@@ -120,6 +145,11 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
                 {
                     materialMeshList.insert({ materialName, stringPath });
                 }
+
+                if (requiresCPV)
+                {
+                    materialCPVList.insert(materialName);
+                }
             }
         }
     }
@@ -128,7 +158,7 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
     {
         if (cnode->children[i])
         {
-            computeMeshMaterials(materialMeshList, cnode->children[i], path, nodeCount, meshCount);
+            computeMeshMaterials(materialMeshList, materialCPVList, cnode->children[i], path, nodeCount, meshCount);
         }
     }
 
@@ -138,7 +168,7 @@ void computeMeshMaterials(GLTFMaterialMeshList& materialMeshList, void* cnodeIn,
 
 }
 
-bool CgltfMaterialLoader::save(const FilePath& filePath)
+bool CgltfMaterialHandler::save(const FilePath& filePath)
 {
     if (!_materials)
     {
@@ -203,9 +233,11 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
 	data->bin = nullptr;
 	data->bin_size = 0;
 
-	data->asset.generator = const_cast<char*>((new string("MaterialX 1.38.4 to glTF generator"))->c_str());;
-    data->asset.version = const_cast<char*>((new string("1.38"))->c_str());
-	data->asset.min_version = const_cast<char*>((new string("1.38"))->c_str());;
+    ;
+    const string versionString = getVersionString();
+	data->asset.generator = const_cast<char*>((new string("MaterialX " + versionString + "1.38.4 to glTF generator"))->c_str());;
+    data->asset.version = const_cast<char*>((new string(versionString))->c_str());
+	data->asset.min_version = const_cast<char*>((new string(versionString))->c_str());;
 
     // Scan for PBR shader nodes
     const string PBR_CATEGORY_STRING("gltf_pbr");
@@ -307,8 +339,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
         NodePtr imageNode = pbrNode->getConnectedNode("base_color");
         if (imageNode)
         {
-            InputPtr fileInput = imageNode->getInput("file");
-            filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+            InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+            filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                 fileInput->getValueString() : EMPTY_STRING;
             if (filename.empty())
                 imageNode = nullptr;
@@ -327,8 +359,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
 
             imageIndex++;
 
-            // Pull off color from gltf_coloredImage node
-            ValuePtr value = pbrNode->getInputValue("color");
+            // Pull off color from gltf_colorImage node
+            ValuePtr value = pbrNode->getInputValue(COLOR_SEMANTIC);
             if (value && value->isA<Color4>())
             {
                 Color4 color = value->asA<Color4>();
@@ -388,7 +420,7 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
                 {
                     if (connectedNode->getCategory() == extractCategory)
                     {
-                        imageNode = connectedNode->getConnectedNode("in");
+                        imageNode = connectedNode->getConnectedNode(IN_STRING);
                     }
                     else
                     {
@@ -398,8 +430,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
 
                 if (imageNode)
                 {
-                    InputPtr fileInput = imageNode->getInput("file");
-                    filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+                    InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+                    filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                         fileInput->getValueString() : EMPTY_STRING;
                     if (inputName != "occlusion")
                     {
@@ -455,12 +487,12 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
             // Read past normalmap node
             if (imageNode->getCategory() == "normalmap")
             {
-                imageNode = imageNode->getConnectedNode("in");
+                imageNode = imageNode->getConnectedNode(IN_STRING);
             }
             if (imageNode)
             {
-                InputPtr fileInput = imageNode->getInput("file");
-                filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+                InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+                filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                     fileInput->getValueString() : EMPTY_STRING;
                 if (filename.empty())
                     imageNode = nullptr;
@@ -483,8 +515,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
         initialize_cgltf_texture_view(sheen.sheen_color_texture);
         if (imageNode)
         {
-            InputPtr fileInput = imageNode->getInput("file");
-            filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+            InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+            filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                 fileInput->getValueString() : EMPTY_STRING;
             if (filename.empty())
                 imageNode = nullptr;
@@ -519,8 +551,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
         initialize_cgltf_texture_view(sheen.sheen_roughness_texture);
         if (imageNode)
         {
-            InputPtr fileInput = imageNode->getInput("file");
-            filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+            InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+            filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                 fileInput->getValueString() : EMPTY_STRING;
             if (filename.empty())
                 imageNode = nullptr;
@@ -551,8 +583,8 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
         initialize_cgltf_texture_view(material->emissive_texture);
         if (imageNode)
         {
-            InputPtr fileInput = imageNode->getInput("file");
-            filename = fileInput && fileInput->getAttribute("type") == "filename" ?
+            InputPtr fileInput = imageNode->getInput(Implementation::FILE_ATTRIBUTE);
+            filename = fileInput && fileInput->getAttribute(TypedElement::TYPE_ATTRIBUTE) == FILENAME_TYPE_STRING ?
                 fileInput->getValueString() : EMPTY_STRING;
             if (filename.empty())
                 imageNode = nullptr;
@@ -606,7 +638,7 @@ bool CgltfMaterialLoader::save(const FilePath& filePath)
     return true;
 }
 
-bool CgltfMaterialLoader::load(const FilePath& filePath)
+bool CgltfMaterialHandler::load(const FilePath& filePath)
 {
     const std::string input_filename = filePath.asString();
     const std::string ext = stringToLower(filePath.getExtension());
@@ -643,53 +675,170 @@ bool CgltfMaterialLoader::load(const FilePath& filePath)
 }
 
 // Utilities
-NodePtr CgltfMaterialLoader::createColoredTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
+NodePtr CgltfMaterialHandler::createColoredTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
                                                   const Color4& color, const std::string & colorspace)
 {
     std::string newTextureName = doc->createValidChildName(nodeName);
-    NodePtr newTexture = doc->addNode("gltf_coloredimage", newTextureName, "multioutput");
-    newTexture->setAttribute("nodedef", "ND_gltf_colortiledimage" );
+    NodePtr newTexture = doc->addNode("gltf_colorimage", newTextureName, MULTI_OUTPUT_TYPE_STRING);
+    if (!newTexture)
+    {
+        return nullptr;
+    }
+    newTexture->setAttribute(InterfaceElement::NODE_DEF_ATTRIBUTE, "ND_gltf_colorimage" );
     if (_generateFullDefinitions)
     {
         newTexture->addInputsFromNodeDef();
     }
-    InputPtr fileInput = newTexture->addInputFromNodeDef("file");
-    fileInput->setValue(fileName, "filename");
+    InputPtr fileInput = newTexture->addInputFromNodeDef(Implementation::FILE_ATTRIBUTE);
+    fileInput->setValue(fileName, FILENAME_TYPE_STRING);
 
-    InputPtr colorInput = newTexture->addInputFromNodeDef("color");
+    InputPtr colorInput = newTexture->addInputFromNodeDef(COLOR_SEMANTIC);
     ValuePtr colorValue = Value::createValue<Color4>(color);
     const string& cvs = colorValue->getValueString();
     colorInput->setValueString(cvs);
 
     if (!colorspace.empty())
     {
-        fileInput->setAttribute("colorspace", colorspace);
+        fileInput->setAttribute(Element::COLOR_SPACE_ATTRIBUTE, colorspace);
     }
     return newTexture;
 }
 
 
-NodePtr CgltfMaterialLoader::createTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
-                                           const std::string & textureType, const std::string & colorspace)
+NodePtr CgltfMaterialHandler::createTexture(DocumentPtr& doc, const std::string & nodeName, const std::string& fileName,
+                                           const std::string& textureType, const std::string & colorspace, 
+                                           const std::string& nodeType)
 {
     std::string newTextureName = doc->createValidChildName(nodeName);
-    NodePtr newTexture = doc->addNode("tiledimage", newTextureName, textureType);
-    newTexture->setAttribute("nodedef", "ND_image_" + textureType);
+    NodePtr newTexture = doc->addNode(nodeType, newTextureName, textureType);
+    if (!newTexture)
+    {
+        return nullptr;
+    }
+    //newTexture->setAttribute(InterfaceElement::NODE_DEF_ATTRIBUTE, "ND_image_" + textureType);
     if (_generateFullDefinitions)
     {
         newTexture->addInputsFromNodeDef();
     }
-    InputPtr fileInput = newTexture->addInputFromNodeDef("file");
-    fileInput->setValue(fileName, "filename");
+    InputPtr fileInput = newTexture->addInputFromNodeDef(Implementation::FILE_ATTRIBUTE);
+    fileInput->setValue(fileName, FILENAME_TYPE_STRING);
     if (!colorspace.empty())
     {
-        fileInput->setAttribute("colorspace", colorspace);
+        fileInput->setAttribute(Element::COLOR_SPACE_ATTRIBUTE, colorspace);
     }
     return newTexture;
 }
 
+void setImageProperties(NodePtr image, const cgltf_texture_view* textureView)
+{
+    cgltf_texture* texture = textureView ? textureView->texture : nullptr;
+    if (!texture)
+    {
+        return;
+    }
 
-void CgltfMaterialLoader::setNormalMapInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName,
+    // Handle uvset index
+    InputPtr uvIndexInput = image->addInputFromNodeDef("uvindex");
+    if (uvIndexInput)
+    {
+        uvIndexInput->setValue<int>(textureView->texcoord);
+    }
+
+    // Handle transform
+    if (textureView->has_transform)
+    {
+        const cgltf_texture_transform& transform = textureView->transform;
+        InputPtr offsetInput = image->addInputFromNodeDef("offset");
+        if (offsetInput)
+        {
+            // Note: Pivot is 0,1 in glTF and 0,0 in MaterialX
+            // This is handled in the MaterialX implemenation
+            // where the pivot is 0,1 and X offset are negative from there.
+            offsetInput->setValueString(std::to_string(transform.offset[0]) + "," +
+                std::to_string(transform.offset[1]));
+        }
+        InputPtr rotationInput = image->addInputFromNodeDef("rotate");
+        if (rotationInput)
+        {
+            // Note: Rotation in glTF and MaterialX are opposite directions
+            // This is handled in the MaterialX implementation
+            rotationInput->setValue<float>(TO_DEGREE * transform.rotation);
+        }
+        InputPtr scaleInput = image->addInputFromNodeDef("scale");
+        if (scaleInput)
+        {
+            // Scale is inverted between glTF and MaterialX.
+            // This is handled in the MaterialX implementation
+            scaleInput->setValueString(std::to_string(transform.scale[0]) + "," +
+                std::to_string(transform.scale[1]));
+        }
+
+        // Handle uvset index
+        if (transform.has_texcoord)
+        {
+            if (!uvIndexInput)
+            {
+                uvIndexInput = image->addInputFromNodeDef("uvindex");
+            }
+            if (uvIndexInput)
+            {
+                uvIndexInput->setValue<int>(transform.texcoord);
+            }
+        }
+
+        // Handle sampler. Magic numbers based upon:
+        // https://github.com/KhronosGroup/glTF/blob/main/specification/2.0/schema/sampler.schema.json
+        cgltf_sampler* sampler = texture->sampler;
+        if (sampler)
+        {
+            std::unordered_map<int, string> wrapMap;
+            wrapMap[33071] = "clamp";
+            wrapMap[33648] = "mirror";
+            wrapMap[10497] = "periodic";
+
+            if (wrapMap.count(sampler->wrap_s))
+            {
+                string uaddress = wrapMap[sampler->wrap_s];
+                InputPtr addressInput = image->addInputFromNodeDef("uaddressmode");
+                if (addressInput)
+                {
+                    addressInput->setValueString(uaddress);
+                }
+            }
+            if (wrapMap.count(sampler->wrap_t))
+            {
+                string vaddress = wrapMap[sampler->wrap_s];
+                InputPtr addressInput = image->addInputFromNodeDef("vaddressmode");
+                if (addressInput)
+                {
+                    addressInput->setValueString(vaddress);
+                }
+            }
+
+            // Filter. There is only one filter type so set based on the
+            // mag filter.
+            std::unordered_map<int, string> filterMap;
+            filterMap[9728] = "closest";
+            filterMap[9729] = "linear";
+            filterMap[9984] = "cubic";
+            filterMap[9985] = "closest";
+            filterMap[9986] = "linear";
+            filterMap[9987] = "cubic";
+
+            if (filterMap.count(sampler->mag_filter))
+            {
+                string filterString = filterMap[sampler->mag_filter];
+                InputPtr filterInput = image->addInputFromNodeDef("filtertype");
+                if (filterInput)
+                {
+                    filterInput->setValueString(filterString);
+                }
+            }
+        }
+    }
+}
+
+void CgltfMaterialHandler::setNormalMapInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName,
     const void* textureViewIn, const std::string& inputImageNodeName)
 {
     const cgltf_texture_view* textureView = static_cast<const cgltf_texture_view*>(textureViewIn);
@@ -704,29 +853,21 @@ void CgltfMaterialLoader::setNormalMapInput(DocumentPtr materials, NodePtr shade
                 inputImageNodeName;
             imageNodeName = _materials->createValidChildName(imageNodeName);
             std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
+            // Note: we create a gltf_normalmap here
             NodePtr newTexture = createTexture(_materials, imageNodeName, uri,
-                "vector3", EMPTY_STRING);
-
-            std::string normalMapName = _materials->createValidChildName("pbr_normalmap");
-            NodePtr normalMap = _materials->addNode("normalmap", normalMapName, "vector3");
-            normalMap->setAttribute("nodedef", "ND_normalmap");
-            if (_generateFullDefinitions)
+                                               VEC3_STRING, EMPTY_STRING, "gltf_normalmap");
+            if (newTexture)
             {
-                normalMap->addInputsFromNodeDef();
-            }
-            else
-            {
-                normalMap->addInputFromNodeDef("in");
-            }
-            normalMap->getInput("in")->setAttribute("nodename", newTexture->getName());
-            normalMap->getInput("in")->setType("vector3");
+                setImageProperties(newTexture, textureView);
 
-            normalInput->setAttribute("nodename", normalMap->getName());
+                normalInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTexture->getName());
+                normalInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);               
+            }
         }
     }
 }
 
-void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNode, const std::string& colorInputName, 
+void CgltfMaterialHandler::setColorInput(DocumentPtr materials, NodePtr shaderNode, const std::string& colorInputName, 
                                        const Color3& color, float alpha, const std::string& alphaInputName, 
                                        const void* textureViewIn,
                                        const std::string& inputImageNodeName)
@@ -752,8 +893,12 @@ void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNod
             imageNodeName = materials->createValidChildName(imageNodeName);
             std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
             NodePtr newTexture = createTexture(materials, imageNodeName, uri, "color3", "srgb_texture");
-            colorInput->setAttribute("nodename", newTexture->getName());
-            colorInput->removeAttribute("value");
+            if (newTexture)
+            {
+                setImageProperties(newTexture, textureView);
+            }
+            colorInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTexture->getName());
+            colorInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);
         }
 
         // Color, alpha lookup
@@ -765,15 +910,19 @@ void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNod
 
             const Color4 color4(color[0], color[1], color[2], alpha);
             NodePtr newTexture = createColoredTexture(materials, imageNodeName, uri, color4, "srgb_texture");
+            if (newTexture)
+            {
+                setImageProperties(newTexture, textureView);
 
-            const string& newTextureName = newTexture->getName();
-            colorInput->setAttribute("nodename", newTextureName);
-            colorInput->setOutputString("outcolor");
-            colorInput->removeAttribute("value");
+                const string& newTextureName = newTexture->getName();
+                colorInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTextureName);
+                colorInput->setOutputString("outcolor");
+                colorInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);
 
-            alphaInput->setAttribute("nodename", newTextureName);
-            alphaInput->setOutputString("outa");
-            alphaInput->removeAttribute("value");
+                alphaInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTextureName);
+                alphaInput->setOutputString("outa");
+                alphaInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);
+            }
         }
     }
 
@@ -792,7 +941,7 @@ void CgltfMaterialLoader::setColorInput(DocumentPtr materials, NodePtr shaderNod
     }
 }
 
-void CgltfMaterialLoader::setFloatInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
+void CgltfMaterialHandler::setFloatInput(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
                                        float floatFactor, const void* textureViewIn,
                                        const std::string& inputImageNodeName)
 {
@@ -807,9 +956,19 @@ void CgltfMaterialLoader::setFloatInput(DocumentPtr materials, NodePtr shaderNod
             std::string imageNodeName = materials->createValidChildName(inputImageNodeName);
             std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
             NodePtr newTexture = createTexture(materials, imageNodeName, uri,
-                "float", EMPTY_STRING);
-            floatInput->setAttribute("nodename", newTexture->getName());
-            floatInput->setValue<float>(floatFactor);
+                                               FLOAT_STRING, EMPTY_STRING);
+            if (newTexture)
+            {
+                setImageProperties(newTexture, textureView);
+            }
+            floatInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTexture->getName());
+            floatInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);               
+
+            floatInput = shaderNode->addInputFromNodeDef("factor");
+            if (floatInput)
+            {
+                floatInput->setValue<float>(floatFactor);
+            }
         }
         else
         {
@@ -818,7 +977,46 @@ void CgltfMaterialLoader::setFloatInput(DocumentPtr materials, NodePtr shaderNod
     }
 }
 
-void CgltfMaterialLoader::loadMaterials(void *vdata)
+void CgltfMaterialHandler::setVector3Input(DocumentPtr materials, NodePtr shaderNode, const std::string& inputName, 
+                                       const Vector3& vecFactor, const void* textureViewIn,
+                                       const std::string& inputImageNodeName)
+{
+    const cgltf_texture_view* textureView = static_cast<const cgltf_texture_view*>(textureViewIn);
+
+    InputPtr vecInput = shaderNode->addInputFromNodeDef(inputName);
+    if (vecInput)
+    {
+        ValuePtr factor = Value::createValue<Vector3>(vecFactor);
+        const string factorString = factor->getValueString();
+
+        cgltf_texture* texture = textureView ? textureView->texture : nullptr;
+        if (texture && texture->image)
+        {
+            std::string imageNodeName = materials->createValidChildName(inputImageNodeName);
+            std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
+            NodePtr newTexture = createTexture(materials, imageNodeName, uri,
+                                               VEC3_STRING, EMPTY_STRING);
+            if (newTexture)
+            {
+                setImageProperties(newTexture, textureView);
+            }
+            vecInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTexture->getName());
+            vecInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);               
+
+            vecInput = shaderNode->addInputFromNodeDef("factor");
+            if (vecInput)
+            {
+                vecInput->setValueString(factorString);
+            }
+        }
+        else
+        {
+            vecInput->setValueString(factorString);
+        }
+    }
+}
+
+void CgltfMaterialHandler::loadMaterials(void *vdata)
 {
     cgltf_data* data = static_cast<cgltf_data*>(vdata);
 
@@ -901,17 +1099,18 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         // Check for unlit
         bool use_unlit = material->unlit;
         string shaderCategory = use_unlit ? "surface_unlit" : "gltf_pbr";
-        NodePtr shaderNode = _materials->addNode(shaderCategory, shaderName, "surfaceshader");
-        //shaderNode->setAttribute("nodedef", "ND_gltf_pbr_surfaceshader");
+        string nodedefString = use_unlit ? "ND_surface_unlit" : "ND_gltf_pbr_surfaceshader";
+        NodePtr shaderNode = _materials->addNode(shaderCategory, shaderName, SURFACE_SHADER_TYPE_STRING);
+        shaderNode->setAttribute(InterfaceElement::NODE_DEF_ATTRIBUTE, nodedefString);
         if (_generateFullDefinitions)
         {
             shaderNode->addInputsFromNodeDef();
         }
 
         // Create a surface material for the shader node
-        NodePtr materialNode = _materials->addNode("surfacematerial", materialName, "material");
-        InputPtr shaderInput = materialNode->addInput("surfaceshader", "surfaceshader");
-        shaderInput->setAttribute("nodename", shaderNode->getName());        
+        NodePtr materialNode = _materials->addNode(SURFACE_MATERIAL_NODE_STRING, materialName, MATERIAL_TYPE_STRING);
+        InputPtr shaderInput = materialNode->addInput(SURFACE_SHADER_TYPE_STRING, SURFACE_SHADER_TYPE_STRING);
+        shaderInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, shaderNode->getName());        
 
         // Handle separate occlusion texture
         bool haveSeparateOcclusion = false;
@@ -980,7 +1179,11 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 imageNodeName = _materials->createValidChildName(imageNodeName);
                 std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
                 NodePtr textureNode = createTexture(_materials, imageNodeName, uri,
-                    "vector3", EMPTY_STRING);
+                                                    VEC3_STRING, EMPTY_STRING);
+                if (textureNode)
+                {
+                    setImageProperties(textureNode, &textureView);
+                }
 
                 // Map image channesl to inputs
                 StringVec indexName = { "x", "y", "z" };
@@ -989,13 +1192,13 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 {
                     if (inputs[i])
                     {
-                        inputs[i]->setAttribute("nodename", textureNode->getName());
-                        inputs[i]->setType("float");
+                        inputs[i]->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, textureNode->getName());
+                        inputs[i]->setType(FLOAT_STRING);
                         inputs[i]->setChannels(indexName[i]);
                     }
                 }
 
-                // See note about both "value" and "nodename" being
+                // See note about both AttributeDef::VALUE_ATTRIBUTE and PortElement::NODE_NAME_ATTRIBUTE being
                 // specified.
                 metallicInput->setValue<float>(roughness.metallic_factor);
                 roughnessInput->setValue<float>(roughness.roughness_factor);
@@ -1050,15 +1253,19 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
                 NodePtr textureNode = createTexture(_materials, imageNodeName, uri,
                     "color4", "srgb_texture");
+                if (textureNode)
+                {
+                    setImageProperties(textureNode, &textureView);
+                }
 
                 StringVec channels = { "rgb", "a" };
-                StringVec types = { "color3", "float" };
+                StringVec types = { "color3", FLOAT_STRING };
                 std::vector<InputPtr> inputs = { specularColorInput, roughnessInput };
                 for (size_t i = 0; i < inputs.size(); i++)
                 {
                     if (inputs[i])
                     {
-                        inputs[i]->setAttribute("nodename", textureNode->getName());
+                        inputs[i]->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, textureNode->getName());
                         inputs[i]->setType(types[i]);
                         inputs[i]->setChannels(channels[i]);
                     }
@@ -1113,6 +1320,61 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
                 "image_sheen_roughness");
         }
 
+        // Parse iridescence
+        // typedef struct cgltf_iridescence
+        //{
+        //	cgltf_float iridescence_factor;
+        //	cgltf_texture_view iridescence_texture;
+        //	cgltf_float iridescence_ior;
+        //	cgltf_float iridescence_thickness_min;
+        //	cgltf_float iridescence_thickness_max;
+        //	cgltf_texture_view iridescence_thickness_texture;
+        //} cgltf_iridescence;
+        // https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_materials_iridescence/README.md
+        if (material->has_iridescence)
+        {
+            const cgltf_iridescence& iridescence = material->iridescence;
+
+            setFloatInput(_materials, shaderNode, "iridescence",
+                iridescence.iridescence_factor, &iridescence.iridescence_texture,
+                "image_iridescence");
+
+            setFloatInput(_materials, shaderNode, "iridescence_ior",
+                iridescence.iridescence_ior, nullptr,
+                "image_iridescence_ior");
+
+            // Create special node to map thickness min, max and input texture
+            InputPtr floatInput = shaderNode->addInputFromNodeDef("iridescence_thickness");
+            if (floatInput)
+            {
+                const cgltf_texture_view& textureView = iridescence.iridescence_thickness_texture;
+                cgltf_texture* texture = textureView.texture;
+                if (texture && texture->image)
+                {
+                    std::string imageNodeName = _materials->createValidChildName("image_iridescence_thickness");
+                    std::string uri = texture->image->uri ? texture->image->uri : SPACE_STRING;
+                    NodePtr newTexture = createTexture(_materials, imageNodeName, uri, FLOAT_STRING, EMPTY_STRING, 
+                                                        "gltf_iridescence_thickness");
+                    if (newTexture)
+                    {
+                        InputPtr minInput = newTexture->addInputFromNodeDef("thicknessMin");
+                        if (minInput)
+                        {
+                            minInput->setValue<float>(iridescence.iridescence_thickness_min);
+                        }
+                        InputPtr maxInput = newTexture->addInputFromNodeDef("thicknessMax");
+                        if (maxInput)
+                        {
+                            maxInput->setValue<float>(iridescence.iridescence_thickness_max);
+                        }
+                        setImageProperties(newTexture, &textureView);
+                    }
+                    floatInput->setAttribute(PortElement::NODE_NAME_ATTRIBUTE, newTexture->getName());
+                    floatInput->removeAttribute(AttributeDef::VALUE_ATTRIBUTE);
+                }
+            }
+        }
+    
         // Parse clearcoat
         // typedef struct cgltf_clearcoat
         // {
@@ -1142,7 +1404,6 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
             // Normal map clearcoat_normal
             setNormalMapInput(_materials, shaderNode, "clearcoat_normal", &material->normal_texture, 
                             "image_clearcoat_normal");
-
         }
 
         // Parse transmission
@@ -1254,34 +1515,55 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         }
     }
 
-    // Create a material assignment for this material if requested
+    // Create material associations. Needed to check if a mesh has CPV which 
+    // the assumption is that the corresponding material is using always it.
     GLTFMaterialMeshList materialMeshList;
-    if (_generateAssignments)
+    StringSet materialCPVList;
+    FilePath meshPath;
+    unsigned int nodeCount = 0;
+    unsigned int meshCount = 0;
+    for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
     {
-        FilePath meshPath;
-        unsigned int nodeCount = 0;
-        unsigned int meshCount = 0;
-        for (cgltf_size sceneIndex = 0; sceneIndex < data->scenes_count; ++sceneIndex)
+        cgltf_scene* scene = &data->scenes[sceneIndex];
+        for (cgltf_size nodeIndex = 0; nodeIndex < scene->nodes_count; ++nodeIndex)
         {
-            cgltf_scene* scene = &data->scenes[sceneIndex];
-            for (cgltf_size nodeIndex = 0; nodeIndex < scene->nodes_count; ++nodeIndex)
+            cgltf_node* cnode = scene->nodes[nodeIndex];
+            if (!cnode)
             {
-                cgltf_node* cnode = scene->nodes[nodeIndex];
-                if (!cnode)
-                {
-                    continue;
-                }
-                computeMeshMaterials(materialMeshList, cnode, meshPath, nodeCount, meshCount);
+                continue;
+            }
+            computeMeshMaterials(materialMeshList, materialCPVList, cnode, meshPath, nodeCount, meshCount);
+        }
+    }
+
+    for (const string& materialName : materialCPVList)
+    {
+        NodePtr materialNode = _materials->getNode(materialName);
+        InputPtr shaderInput = materialNode ? materialNode->getInput("surfaceshader") : nullptr;
+        NodePtr shaderNode = shaderInput ? shaderInput->getConnectedNode() : nullptr;
+        InputPtr baseColorInput = shaderNode ? shaderNode->getInput("base_color") : nullptr;
+        NodePtr baseColorNode = baseColorInput ? baseColorInput->getConnectedNode() : nullptr;
+        if (baseColorNode)
+        {
+            InputPtr geomcolorInput = baseColorNode->addInputFromNodeDef("geomcolor");
+            if (geomcolorInput)
+            {
+                NodePtr geomcolor = _materials->addNode("geomcolor", EMPTY_STRING, "color4");
+                geomcolorInput->setNodeName(geomcolor->getName());
             }
         }
+    }
 
+    // Create a material assignment for this material if requested
+    if (_generateAssignments)
+    {
         // Add look with material assignments if requested
         LookPtr look = _materials->addLook();
         for (auto materialItem : materialMeshList)
         {
             const string& materialName = materialItem.first;
             const string& paths = materialItem.second;
-  
+
             // Keep the assignment as simple as possible as more complex
             // systems such as USD can parse these files easily.
             MaterialAssignPtr matAssign = look->addMaterialAssign(EMPTY_STRING, materialName);
@@ -1289,7 +1571,5 @@ void CgltfMaterialLoader::loadMaterials(void *vdata)
         }
     }
 }
-
-
 
 MATERIALX_NAMESPACE_END

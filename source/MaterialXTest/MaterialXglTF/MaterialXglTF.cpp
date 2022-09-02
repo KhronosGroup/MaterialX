@@ -1,7 +1,7 @@
 
 #include <MaterialXTest/Catch/catch.hpp>
 
-#include <MaterialXglTF/CgltfMaterialLoader.h>
+#include <MaterialXglTF/CgltfMaterialHandler.h>
 #include <MaterialXFormat/Environ.h>
 #include <MaterialXFormat/Util.h>
 #include <MaterialXFormat/XmlIo.h>
@@ -16,7 +16,7 @@ namespace mx = MaterialX;
 mx::DocumentPtr glTF2Mtlx(const mx::FilePath& filename, mx::DocumentPtr definitions, 
                           bool createAssignments, bool fullDefinition)
 {
-    mx::MaterialLoaderPtr gltfMTLXLoader = mx::CgltfMaterialLoader::create();
+    mx::MaterialHandlerPtr gltfMTLXLoader = mx::CgltfMaterialHandler::create();
     gltfMTLXLoader->setDefinitions(definitions);
     gltfMTLXLoader->setGenerateAssignments(createAssignments);
     gltfMTLXLoader->setGenerateFullDefinitions(fullDefinition);
@@ -28,7 +28,7 @@ mx::DocumentPtr glTF2Mtlx(const mx::FilePath& filename, mx::DocumentPtr definiti
 // MaterialX to cgTF conversion
 bool mtlx2glTF(const mx::FilePath& filename, mx::DocumentPtr materials)
 {
-    mx::MaterialLoaderPtr gltfMTLXLoader = mx::CgltfMaterialLoader::create();
+    mx::MaterialHandlerPtr gltfMTLXLoader = mx::CgltfMaterialHandler::create();
     gltfMTLXLoader->setMaterials(materials);
     return gltfMTLXLoader->save(filename);
 }
@@ -50,12 +50,24 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
         return true;
     };
 
-    // Scan for glTF files
+    // Scan for glTF sample mode files in resources directory
+    const mx::FilePath currentPath = mx::FilePath::getCurrentPath();
+    mx::FilePath rootPath = currentPath / "resources/Materials/TestSuite/glTF/2.0/";
+
+    // Check if an environment variable was set as the root
+    if (!rootPath.exists())
+    {
+        rootPath = mx::getEnviron("GLTF_SAMPLE_MODELS_ROOT");
+    }
+    if (!rootPath.exists())
+    {
+        std::cout << "glTF sample models not found: " << rootPath.asString() << ". Skipping test" << std::endl;
+        return;
+    }
+
     bool createAssignments = true;
     bool fullDefinition = false;
     const std::string GLTF_EXTENSION("gltf");
-    const mx::FilePath currentPath = mx::FilePath::getCurrentPath();
-    mx::FilePath rootPath = currentPath / "resources/Materials/TestSuite/glTF/2.0/";
     for (const mx::FilePath& dir : rootPath.getSubDirectories())
     {
         if (std::string::npos != dir.asString().find("glTF-Binary") || 
@@ -79,11 +91,13 @@ TEST_CASE("glTF: Valid glTF -> MTLX", "[gltf]")
                         std::cerr << "*** Validation warnings document created from: " << fullPath.asString() << " ***" << std::endl;
                         std::cerr << message;
                     }
-                    const std::string outputFileName = fullPath.asString() + "_converted.mtlx";
+                    mx::FilePath outputPath = fullPath;
+                    outputPath.removeExtension();
+                    const std::string outputFileName = outputPath.asString() + "_converted.mtlx";
                     std::cout << "Wrote " << std::to_string(nodes.size()) << " materials to file : " << outputFileName << std::endl;
                     mx::writeToXmlFile(materials, outputFileName, &writeOptions);
 
-                    const std::string outputFileName2 = outputFileName + "_converted.gltf";
+                    const std::string outputFileName2 = outputPath.asString() + "_converted.gltf";
                     if (mtlx2glTF(outputFileName2, materials))
                     {
                         std::cout << "Wrote MTLX materials to glTF file : " << outputFileName2 << std::endl;
