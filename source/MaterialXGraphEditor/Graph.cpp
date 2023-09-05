@@ -4389,6 +4389,10 @@ void Graph::saveDocument(mx::FilePath filePath)
         jsonWriteOptions.addNodeGraphChildren = true;
         mx::writeToJSONFile(writeDoc, filePath.asString(), &jsonWriteOptions);
         std::cout << "Wrote JSON (with nodegraph children) file: " << filePath.asString() << std::endl;
+
+        jsonWriteOptions.addDefinitionInformation = true;
+        mx::writeToJSONFile(writeDoc, filePath.asString() + "_withdefs.json", &jsonWriteOptions);
+        std::cout << "Wrote JSON (with nodegraph children) file: " << filePath.asString() + "_withdefs.json" << std::endl;
     }
     else
     {
