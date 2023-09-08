@@ -34,37 +34,33 @@ def main():
         print('Failed to create GltfMaterialHandler')
         return
     
-    utils = mx_gltf.GltfMaterialUtil()
-    if not utils:
-        print('Failed to create GltfMaterialUtil')
-        return
-
     log = []
-        
+
+    stdlib = mx.createDocument()
+    searchPath = mx.getDefaultDataSearchPath()
+    libraryFolders = []
+    libraryFolders.extend(mx.getDefaultDataLibraryFolders())
+    try:
+        mx.loadLibraries(libraryFolders, searchPath, stdlib)
+    except mx.Exception as err:
+        print('Failed to load standard libraries: "', err, '"')
+        sys.exit(-1)
+
     # Convert from Materialx to GLTF
     if toGLTF:
         doc = mx.createDocument()
         mx.readFromXmlFile(doc, inputFilePath)
+        doc.importLibrary(stdlib)
+
         outputFilePath = inputFilePath
         print('Converting MaterialX file:%s to glTF file: %s' % 
               (inputFilePath.asString(), outputFilePath.asString() + '.gltf'))
-        converted = utils.mtlx2glTF(handler, outputFilePath.asString() + '.gltf', doc, log)        
-        outputFilePath.addExtension('gltf')
-        print("- Converted: " + str(converted))
-        if not converted:
-            print("- Log: " + '\n'.join(log))
+        handler.setMaterials(doc)
+        convert = handler.save(outputFilePath.asString() + '.gltf', log)
+        print('- Converted: ' + str(convert))
 
     # Convert from GLTF to MaterialX
     elif toMaterialX:
-        stdlib = mx.createDocument()
-        searchPath = mx.getDefaultDataSearchPath()
-        libraryFolders = []
-        libraryFolders.extend(mx.getDefaultDataLibraryFolders())
-        try:
-            mx.loadLibraries(libraryFolders, searchPath, stdlib)
-        except mx.Exception as err:
-            print('Failed to load standard libraries: "', err, '"')
-            sys.exit(-1)
 
         outputFilePath = mx.FilePath()
         outputFilePath = inputFilePath
