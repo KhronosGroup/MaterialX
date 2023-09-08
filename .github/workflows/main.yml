@@ -90,6 +90,12 @@ jobs:
           python: None
           cmake_config: -DMATERIALX_BUILD_IOS=ON -DCMAKE_OSX_SYSROOT=`xcrun --sdk iphoneos --show-sdk-path` -DCMAKE_OSX_ARCHITECTURES=arm64
 
+        - name: Windows_VS2019_Win32_Python37
+          os: windows-2019
+          architecture: x86
+          python: 3.7
+          cmake_config: -G "Visual Studio 16 2019" -A "Win32" -DMATERIALX_BUILD_SHARED_LIBS=ON
+
         - name: Windows_VS2022_x64_Python39
           os: windows-2022
           architecture: x64

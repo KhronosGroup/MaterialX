@@ -26,8 +26,7 @@
     #pragma warning(disable : 4996)
 #endif
 
-#undef CGLTF_IMPLEMENTATION
-//#define CGLTF_IMPLEMENTATION //-- don't set to avoid duplicate symbols
+#undef CGLTF_IMPLEMENTATION //-- don't set to avoid duplicate symbols
 #include <MaterialXRender/External/Cgltf/cgltf.h>
 #define CGLTF_WRITE_IMPLEMENTATION
 #include <MaterialXRender/External/Cgltf/cgltf_write.h>

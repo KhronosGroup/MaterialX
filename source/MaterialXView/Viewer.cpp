@@ -35,7 +35,6 @@
 #include <MaterialXGenGlsl/EsslShaderGenerator.h>
 
 #include <MaterialXRender/GltfMaterialHandler.h>
-#include <MaterialXRender/GltfMaterialUtill.h>
 
 #include <MaterialXFormat/Environ.h>
 #include <MaterialXFormat/Util.h>
@@ -143,7 +142,7 @@ void applyModifiers(mx::DocumentPtr doc, const DocumentModifiers& modifiers)
             }
         }
     }
-#if 0
+
     // Remap unsupported texture coordinate indices.
     for (mx::ElementPtr elem : doc->traverseTree())
     {
@@ -158,7 +157,6 @@ void applyModifiers(mx::DocumentPtr doc, const DocumentModifiers& modifiers)
             }
         }
     }
-#endif    
 }
 
 // ViewDir implementation for GLSL
@@ -645,7 +643,8 @@ void Viewer::createLoadMaterialsInterface(Widget* parent, const std::string& lab
     {
         m_process_events = false;
         std::string filename = ng::file_dialog({ { "mtlx", "MaterialX" },
-                                                 { "gltf", "GLTF ASCII"} }, false);
+                                                 { "gltf", "GLTF ASCII"},
+                                                 { "glb", "GLTF Binary"}}, false);
         if (!filename.empty())
         {
             loadDocument(filename, _stdLib);
@@ -689,7 +688,8 @@ void Viewer::createSaveMaterialsInterface(Widget* parent, const std::string& lab
         m_process_events = false;
         mx::MaterialPtr material = getSelectedMaterial();
         mx::FilePath filename = ng::file_dialog({ { "mtlx", "MaterialX" },
-                                                  { "gltf", "GLTF ASCII" }}, true);
+                                                  { "gltf", "GLTF ASCII" },
+                                                  { "glb", "GLTF Binary"} }, true);
 
         // Save document
         if (material && !filename.isEmpty())
@@ -707,9 +707,10 @@ void Viewer::createSaveMaterialsInterface(Widget* parent, const std::string& lab
             }
             else
             {
-                mx::MaterialHandlerPtr gltfHandler = mx::GltfMaterialHandler::create();
                 mx::StringVec log;
-                mx::GltfMaterialUtil::mtlx2glTF(gltfHandler, filename, material->getDocument(), log);
+                mx::MaterialHandlerPtr gltfHandler = mx::GltfMaterialHandler::create();
+                gltfHandler->setMaterials(material->getDocument());
+                gltfHandler->save(filename, log);    
             }
 
             // Update material file name
@@ -1263,10 +1264,19 @@ void Viewer::loadDocument(const mx::FilePath& filename, mx::DocumentPtr librarie
     try
     {
         mx::DocumentPtr doc = nullptr;
-        if (filename.getExtension() == "gltf")
+        if (filename.getExtension() == "gltf" || filename.getExtension() == "glb")
         {
             mx::StringVec log;
-            doc = mx::GltfMaterialUtil::glTF2Mtlx(filename, libraries, true, true, log);
+            mx::MaterialHandlerPtr gltfMTLXLoader = mx::GltfMaterialHandler::create();
+            gltfMTLXLoader->setDefinitions(libraries);
+            gltfMTLXLoader->setGenerateAssignments(true);
+            gltfMTLXLoader->setGenerateFullDefinitions(false);
+    
+            bool loadedMaterial = gltfMTLXLoader->load(filename, log);
+            if (loadedMaterial)
+            {
+                doc = gltfMTLXLoader->getMaterials();
+            }
         }
         else
         {

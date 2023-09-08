@@ -9,7 +9,6 @@
 #include <MaterialXFormat/Util.h>
 
 #include <MaterialXRender/GltfMaterialHandler.h>
-#include <MaterialXRender/GltfMaterialUtill.h>
 
 #include <imgui_stdlib.h>
 #include <imgui_node_editor_internal.h>
@@ -211,14 +210,22 @@ mx::DocumentPtr Graph::loadDocument(mx::FilePath filename)
     {
         if (!filename.isEmpty())
         {
+            doc = mx::createDocument();
             if (filename.getExtension() == "gltf" || filename.getExtension() == "glb")
             {
                 mx::StringVec log;
-                doc = mx::GltfMaterialUtil::glTF2Mtlx(filename, _stdLib, false, false, log);
-            }
+                mx::MaterialHandlerPtr gltfMTLXLoader = mx::GltfMaterialHandler::create();
+                gltfMTLXLoader->setDefinitions(_stdLib);
+                gltfMTLXLoader->setGenerateAssignments(false);
+                gltfMTLXLoader->setGenerateFullDefinitions(false);
+                bool loadedMaterial = gltfMTLXLoader->load(filename, log);
+                if (loadedMaterial)
+                {
+                    doc = gltfMTLXLoader->getMaterials();
+                }       
+            }         
             else
             {
-                doc = mx::createDocument();
                 mx::readFromXmlFile(doc, filename, _searchPath, &readOptions);
             }
         }
@@ -4371,10 +4378,11 @@ void Graph::saveDocument(mx::FilePath filePath)
         writeOptions.elementPredicate = getElementPredicate();
         mx::writeToXmlFile(writeDoc, filePath, &writeOptions);
     }
-        else
+    else
     {
-        mx::MaterialHandlerPtr gltfHandler = mx::GltfMaterialHandler::create();
         mx::StringVec log;
-        mx::GltfMaterialUtil::mtlx2glTF(gltfHandler, filePath, writeDoc, log);
+        mx::MaterialHandlerPtr gltfHandler = mx::GltfMaterialHandler::create();
+        gltfHandler->setMaterials(writeDoc);
+        gltfHandler->save(filePath, log);
     }
 }

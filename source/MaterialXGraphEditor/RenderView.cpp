@@ -101,7 +101,7 @@ void applyModifiers(mx::DocumentPtr doc, const DocumentModifiers& modifiers)
             }
         }
     }
-#if 0
+
     // Remap unsupported texture coordinate indices.
     for (mx::ElementPtr elem : doc->traverseTree())
     {
@@ -115,8 +115,7 @@ void applyModifiers(mx::DocumentPtr doc, const DocumentModifiers& modifiers)
                 index->setValue(0);
             }
         }
-    }
-#endif    
+    }  
 }
 
 void RenderView::setDocument(mx::DocumentPtr document)
